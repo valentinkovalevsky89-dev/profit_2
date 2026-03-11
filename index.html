@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Поток прибыли обменника</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Manrope:wght@300;500;700;800&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --border: #1e2d45;
+    --eur: #3b82f6;
+    --huf: #f59e0b;
+    --usdt: #10b981;
+    --usd: #f43f5e;
+    --czk: #a78bfa;
+    --profit: #a78bfa;
+    --text: #e2e8f0;
+    --muted: #64748b;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Manrope', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .noise {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    opacity: 0.4;
+  }
+
+  .container {
+    position: relative; z-index: 1;
+    max-width: 1040px; margin: 0 auto;
+    padding: 48px 24px;
+  }
+
+  header { text-align: center; margin-bottom: 56px; }
+  header h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: clamp(18px, 3vw, 26px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+  header p { color: var(--muted); font-size: 14px; font-weight: 300; }
+
+  .balances {
+    display: grid; grid-template-columns: repeat(5, 1fr);
+    gap: 12px; margin-bottom: 40px;
+  }
+
+  .asset-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 14px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .asset-card:hover { transform: translateY(-3px); }
+  .asset-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .asset-card.eur::before  { background: var(--eur); }
+  .asset-card.huf::before  { background: var(--huf); }
+  .asset-card.usdt::before { background: var(--usdt); }
+  .asset-card.usd::before  { background: var(--usd); }
+  .asset-card.czk::before  { background: var(--czk); }
+
+  .asset-icon {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; font-weight: 700;
+  }
+  .eur  .asset-icon { background: rgba(59,130,246,0.15);  color: var(--eur); }
+  .huf  .asset-icon { background: rgba(245,158,11,0.15);  color: var(--huf); }
+  .usdt .asset-icon { background: rgba(16,185,129,0.15);  color: var(--usdt); }
+  .usd  .asset-icon { background: rgba(244,63,94,0.15);   color: var(--usd); }
+  .czk  .asset-icon { background: rgba(167,139,250,0.15); color: var(--czk); }
+
+  .asset-name { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+
+  .asset-balance {
+    font-family: 'Space Mono', monospace;
+    font-size: clamp(13px, 1.8vw, 18px);
+    font-weight: 700; color: #fff;
+    transition: all 0.4s;
+  }
+
+  .asset-profit {
+    font-size: 11px; margin-top: 5px;
+    font-family: 'Space Mono', monospace;
+    transition: all 0.4s;
+  }
+  .profit-pos  { color: var(--usdt); }
+  .profit-neg  { color: #f87171; }
+  .profit-zero { color: var(--muted); }
+
+  .deal-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    margin-bottom: 28px;
+  }
+
+  .deal-panel h2 {
+    font-size: 13px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--muted); margin-bottom: 20px;
+  }
+
+  .deal-row {
+    display: grid; grid-template-columns: 1fr 100px auto 1fr 100px;
+    gap: 10px; align-items: end; margin-bottom: 20px;
+  }
+
+  .field label {
+    display: block; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--muted); margin-bottom: 7px;
+  }
+
+  .field select, .field input {
+    width: 100%;
+    background: #0d1526;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: #fff;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    padding: 11px 12px;
+    outline: none;
+    transition: border-color 0.2s;
+    appearance: none;
+  }
+  .field select:focus, .field input:focus { border-color: var(--profit); }
+
+  .arrow-label {
+    font-size: 20px; color: var(--muted);
+    padding-bottom: 12px; text-align: center;
+  }
+
+  .market-row { margin-bottom: 20px; }
+  .market-row .field { max-width: 320px; }
+
+  .btn-deal {
+    width: 100%;
+    background: linear-gradient(135deg, #6d28d9, #4f46e5);
+    border: none; border-radius: 12px;
+    color: #fff; font-family: 'Manrope', sans-serif;
+    font-size: 15px; font-weight: 700;
+    padding: 15px; cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  .btn-deal:hover { opacity: 0.9; }
+  .btn-deal:active { transform: scale(0.98); }
+
+  .log-section h2 {
+    font-size: 13px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--muted); margin-bottom: 14px;
+  }
+
+  .log-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .log-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 14px; align-items: center;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .log-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; color: var(--muted);
+    background: #0d1526; border-radius: 6px;
+    padding: 4px 8px; min-width: 32px; text-align: center;
+  }
+
+  .log-desc { font-size: 13px; color: var(--text); line-height: 1.6; }
+
+  .log-profit {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px; font-weight: 700;
+    text-align: right; white-space: nowrap;
+  }
+
+  .tag {
+    display: inline-block; border-radius: 5px;
+    padding: 2px 7px; font-size: 11px; font-weight: 700;
+    font-family: 'Space Mono', monospace;
+    vertical-align: middle; margin: 0 2px;
+  }
+  .tag-eur  { background: rgba(59,130,246,0.15);  color: var(--eur); }
+  .tag-huf  { background: rgba(245,158,11,0.15);  color: var(--huf); }
+  .tag-usdt { background: rgba(16,185,129,0.15);  color: var(--usdt); }
+  .tag-usd  { background: rgba(244,63,94,0.15);   color: var(--usd); }
+  .tag-czk  { background: rgba(167,139,250,0.15); color: var(--czk); }
+
+  .empty-log {
+    text-align: center; padding: 40px;
+    color: var(--muted); font-size: 14px;
+    border: 1px dashed var(--border); border-radius: 12px;
+  }
+
+  .reset-btn {
+    background: none; border: 1px solid var(--border);
+    border-radius: 8px; color: var(--muted);
+    font-size: 12px; padding: 8px 16px;
+    cursor: pointer; margin-top: 14px;
+    font-family: 'Manrope', sans-serif;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .reset-btn:hover { color: #f87171; border-color: #f87171; }
+
+  .summary-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 28px;
+    display: flex; gap: 24px; flex-wrap: wrap;
+    align-items: center;
+  }
+  .summary-bar .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .summary-bar .val   { font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; color: var(--profit); }
+
+  @media (max-width: 700px) {
+    .deal-row { grid-template-columns: 1fr 1fr; }
+    .arrow-label { display: none; }
+    .balances { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 400px) {
+    .balances { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<div class="container">
+
+  <header>
+    <h1>Поток прибыли обменника</h1>
+    <p>EUR · HUF · USDT · USD · CZK — прибыль фиксируется в момент каждой сделки</p>
+  </header>
+
+  <div class="balances">
+    <div class="asset-card eur">
+      <div class="asset-icon">€</div>
+      <div class="asset-name">Euro</div>
+      <div class="asset-balance" id="bal-eur">0.00</div>
+      <div class="asset-profit profit-zero" id="prof-eur">прибыль: 0.00</div>
+    </div>
+    <div class="asset-card huf">
+      <div class="asset-icon">Ft</div>
+      <div class="asset-name">Forint</div>
+      <div class="asset-balance" id="bal-huf">0</div>
+      <div class="asset-profit profit-zero" id="prof-huf">прибыль: 0</div>
+    </div>
+    <div class="asset-card usdt">
+      <div class="asset-icon">$T</div>
+      <div class="asset-name">USDT</div>
+      <div class="asset-balance" id="bal-usdt">0.00</div>
+      <div class="asset-profit profit-zero" id="prof-usdt">прибыль: 0.00</div>
+    </div>
+    <div class="asset-card usd">
+      <div class="asset-icon">$</div>
+      <div class="asset-name">USD</div>
+      <div class="asset-balance" id="bal-usd">0.00</div>
+      <div class="asset-profit profit-zero" id="prof-usd">прибыль: 0.00</div>
+    </div>
+    <div class="asset-card czk">
+      <div class="asset-icon">Kč</div>
+      <div class="asset-name">Koruna</div>
+      <div class="asset-balance" id="bal-czk">0.00</div>
+      <div class="asset-profit profit-zero" id="prof-czk">прибыль: 0.00</div>
+    </div>
+  </div>
+
+  <div class="summary-bar" id="summary-bar" style="display:none">
+    <div><div class="label">Сделок</div><div class="val" id="sum-deals">0</div></div>
+    <div><div class="label">EUR</div><div class="val" id="sum-eur">0.00 €</div></div>
+    <div><div class="label">HUF</div><div class="val" id="sum-huf">0 Ft</div></div>
+    <div><div class="label">USDT</div><div class="val" id="sum-usdt">0.00</div></div>
+    <div><div class="label">USD</div><div class="val" id="sum-usd">0.00 $</div></div>
+    <div><div class="label">CZK</div><div class="val" id="sum-czk">0.00 Kč</div></div>
+  </div>
+
+  <div class="deal-panel">
+    <h2>Новая сделка</h2>
+    <div class="deal-row">
+      <div class="field">
+        <label>Ты отдаёшь</label>
+        <input type="number" id="give-amount" placeholder="1850" min="0" step="any">
+      </div>
+      <div class="field">
+        <label>Валюта</label>
+        <select id="give-cur">
+          <option value="eur">EUR €</option>
+          <option value="huf">HUF Ft</option>
+          <option value="usdt">USDT</option>
+          <option value="usd">USD $</option>
+          <option value="czk">CZK Kč</option>
+        </select>
+      </div>
+      <div class="arrow-label">→</div>
+      <div class="field">
+        <label>Клиент отдаёт</label>
+        <input type="number" id="get-amount" placeholder="2188" min="0" step="any">
+      </div>
+      <div class="field">
+        <label>Валюта</label>
+        <select id="get-cur">
+          <option value="usdt">USDT</option>
+          <option value="eur">EUR €</option>
+          <option value="huf">HUF Ft</option>
+          <option value="usd">USD $</option>
+          <option value="czk">CZK Kč</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="market-row">
+      <div class="field">
+        <label>Рыночный курс (1 <span id="market-base-label">USDT</span> = ? <span id="market-quote-label">EUR</span>)</label>
+        <input type="number" id="market-rate" placeholder="0.92" step="any">
+      </div>
+    </div>
+
+    <button class="btn-deal" onclick="addDeal()">Зафиксировать сделку →</button>
+  </div>
+
+  <div class="log-section">
+    <h2>История сделок</h2>
+    <div class="log-list" id="log-list">
+      <div class="empty-log">Сделок пока нет — добавьте первую выше</div>
+    </div>
+    <button class="reset-btn" onclick="resetAll()">Сбросить всё</button>
+  </div>
+
+</div>
+
+<script>
+  const CURRENCIES = ['eur','huf','usdt','usd','czk'];
+  const symbols = { eur: '€', huf: 'Ft', usdt: 'USDT', usd: '$', czk: 'Kč' };
+
+  const state = {
+    balances: Object.fromEntries(CURRENCIES.map(c => [c, 0])),
+    profits:  Object.fromEntries(CURRENCIES.map(c => [c, 0])),
+    deals: []
+  };
+
+  function fmt(val, cur) {
+    if (cur === 'huf' || cur === 'czk') return Math.round(val).toLocaleString('ru') + ' ' + symbols[cur];
+    return val.toFixed(2) + ' ' + symbols[cur];
+  }
+
+  function updateMarketLabels() {
+    const give = document.getElementById('give-cur').value;
+    const get  = document.getElementById('get-cur').value;
+    document.getElementById('market-base-label').textContent  = symbols[get];
+    document.getElementById('market-quote-label').textContent = symbols[give];
+  }
+
+  document.getElementById('give-cur').addEventListener('change', updateMarketLabels);
+  document.getElementById('get-cur').addEventListener('change', updateMarketLabels);
+  updateMarketLabels();
+
+  function renderBalances() {
+    CURRENCIES.forEach(cur => {
+      document.getElementById('bal-' + cur).textContent = fmt(state.balances[cur], cur);
+      const p  = state.profits[cur];
+      const el = document.getElementById('prof-' + cur);
+      el.textContent = 'прибыль: ' + fmt(p, cur);
+      el.className   = 'asset-profit ' + (p > 0 ? 'profit-pos' : p < 0 ? 'profit-neg' : 'profit-zero');
+    });
+
+    const has = state.deals.length > 0;
+    document.getElementById('summary-bar').style.display = has ? 'flex' : 'none';
+    document.getElementById('sum-deals').textContent = state.deals.length;
+    document.getElementById('sum-eur').textContent   = fmt(state.profits.eur,  'eur');
+    document.getElementById('sum-huf').textContent   = fmt(state.profits.huf,  'huf');
+    document.getElementById('sum-usdt').textContent  = fmt(state.profits.usdt, 'usdt');
+    document.getElementById('sum-usd').textContent   = fmt(state.profits.usd,  'usd');
+    document.getElementById('sum-czk').textContent   = fmt(state.profits.czk,  'czk');
+  }
+
+  function renderLog() {
+    const list = document.getElementById('log-list');
+    if (state.deals.length === 0) {
+      list.innerHTML = '<div class="empty-log">Сделок пока нет — добавьте первую выше</div>';
+      return;
+    }
+    list.innerHTML = state.deals.slice().reverse().map((d, i) => {
+      const num = state.deals.length - i;
+      const sign  = d.profit >= 0 ? '+' : '';
+      const color = d.profit >= 0 ? '#10b981' : '#f87171';
+      return `
+        <div class="log-item">
+          <div class="log-num">#${num}</div>
+          <div class="log-desc">
+            Отдал <span class="tag tag-${d.giveCur}">${fmt(d.giveAmount, d.giveCur)}</span>
+            → получил <span class="tag tag-${d.getCur}">${fmt(d.getAmount, d.getCur)}</span>
+            <br><small style="color:var(--muted)">курс: 1 ${symbols[d.getCur]} = ${d.rate} ${symbols[d.giveCur]}</small>
+          </div>
+          <div class="log-profit" style="color:${color}">
+            ${sign}${fmt(d.profit, d.getCur)}<br>
+            <small style="color:var(--muted)">${sign}${d.pct}%</small>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function addDeal() {
+    const giveAmount = parseFloat(document.getElementById('give-amount').value);
+    const giveCur    = document.getElementById('give-cur').value;
+    const getAmount  = parseFloat(document.getElementById('get-amount').value);
+    const getCur     = document.getElementById('get-cur').value;
+    const marketRate = parseFloat(document.getElementById('market-rate').value);
+
+    if (!giveAmount || !getAmount || !marketRate || giveCur === getCur) {
+      alert('Заполни все поля. Валюты должны быть разными.');
+      return;
+    }
+
+    const marketValueInGetCur = giveAmount / marketRate;
+    const profit = getAmount - marketValueInGetCur;
+    const pct    = ((profit / marketValueInGetCur) * 100).toFixed(1);
+
+    state.balances[giveCur] -= giveAmount;
+    state.balances[getCur]  += getAmount;
+    state.profits[getCur]   += profit;
+
+    state.deals.push({ giveAmount, giveCur, getAmount, getCur, rate: marketRate, profit, pct });
+
+    renderBalances();
+    renderLog();
+
+    const card = document.querySelector('.asset-card.' + getCur);
+    if (card) {
+      card.style.boxShadow = `0 0 24px 4px var(--${getCur})`;
+      setTimeout(() => card.style.boxShadow = '', 800);
+    }
+  }
+
+  function resetAll() {
+    CURRENCIES.forEach(c => { state.balances[c] = 0; state.profits[c] = 0; });
+    state.deals = [];
+    renderBalances();
+    renderLog();
+  }
+
+  renderBalances();
+</script>
+</body>
+</html>
