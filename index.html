@@ -152,7 +152,16 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
   .arrow{display:none;}
 }
 
-/* AGENT CONFIG */
+/* DAILY PNL PANEL */
+.pnl-panel{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:14px 18px;display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+.pnl-block{display:flex;flex-direction:column;gap:3px;}
+.pnl-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;}
+.pnl-val{font-size:16px;font-weight:700;}
+.pnl-sub{font-size:10px;color:var(--muted);}
+.pnl-divider{width:1px;height:36px;background:var(--border);flex-shrink:0;}
+.pnl-refresh{background:none;border:1px solid var(--border);border-radius:7px;color:var(--muted);font-family:'JetBrains Mono',monospace;font-size:10px;padding:6px 10px;cursor:pointer;margin-left:auto;}
+.pnl-refresh:hover{color:var(--text);border-color:var(--text);}
+.pnl-round-badge{font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(251,146,60,.12);color:var(--orange);margin-left:6px;}
 .agent-cfg-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;}
 .agent-cfg-row.owner-row{border-color:var(--green);opacity:.8;}
 .agent-cfg-name{background:none;border:none;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;width:110px;outline:none;border-bottom:1px solid var(--border);}
@@ -201,16 +210,14 @@ body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospa
 <div class="page active" id="page-exchange">
 
   <div class="settings-row" style="padding-top:16px">
-    <div class="si"><label>EUR капитал</label><input type="number" id="cap-eur" value="3000"></div>
-    <div class="si"><label>HUF капитал</label><input type="number" id="cap-huf" value="2000000"></div>
-    <div class="si"><label>USDT капитал</label><input type="number" id="cap-usdt" value="3000"></div>
-    <div class="si"><label>USD капитал</label><input type="number" id="cap-usd" value="0"></div>
-    <div class="si"><label>CZK капитал</label><input type="number" id="cap-czk" value="0"></div>
     <div class="si" style="cursor:pointer;" id="btn-agent-cfg"><label style="cursor:pointer;">Агенты</label><span id="agents-summary" style="color:var(--green);font-size:12px;font-weight:700;">⚙</span></div>
   </div>
 
   <!-- ASSET CARDS -->
   <div class="g5" id="ex-assets"></div>
+
+  <!-- DAILY P&L PANEL -->
+  <div id="daily-pnl-panel" style="margin-bottom:16px;"></div>
 
   <!-- AGENT CARDS -->
   <div class="g2" id="ex-agents"></div>
@@ -564,11 +571,19 @@ function fetchAllRatesUsdt() {
     });
 }
 
-// Sync DOM capital inputs -> exState.capital, then rebuild
-function syncCapital() {
-  ['eur','huf','usdt','usd','czk'].forEach(function(c) {
-    exState.capital[c] = parseFloat(document.getElementById('cap-'+c).value)||0;
+function cap(c) {
+  // Capital = sum of all cashflow 'in' minus 'out' for this currency
+  var total = 0;
+  (exState.cashflows || []).forEach(function(cf) {
+    if (cf.cur !== c) return;
+    if (cf.type === 'in')  total += cf.amt;
+    if (cf.type === 'out') total -= cf.amt;
   });
+  return total;
+}
+
+// syncCapital no longer needed (no DOM inputs) — kept as no-op for safety
+function syncCapital() {
   rebuildRounds();
   renderExchange();
 }
@@ -576,8 +591,124 @@ function today() { return new Date().toLocaleDateString('ru',{day:'2-digit',mont
 function now()   { return new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}); }
 
 // ================================================================
-// ROUND LOGIC
+// DAILY P&L — operational mark-to-market
 // ================================================================
+var cachedRates = null;      // last fetched {eur, huf, usd, czk}
+var ratesFetchedAt = null;   // timestamp
+
+function renderDailyPnl() {
+  var panel = document.getElementById('daily-pnl-panel');
+  if (!panel) return;
+
+  var todayStr = today();
+  var todayDeals = exState.deals.filter(function(d){ return d.date === todayStr; });
+
+  // Profit today in native currencies
+  var todayProfits = {};
+  todayDeals.forEach(function(d){
+    todayProfits[d.getCur] = (todayProfits[d.getCur] || 0) + d.profit;
+  });
+
+  // Open round info
+  var openR = exState.openRound2
+    ? exState.rounds2.find(function(r){ return r.id === exState.openRound2; })
+    : null;
+
+  // Portfolio valuation
+  var rates = cachedRates;
+  var portfolioNow  = rates ? portfolioToUsdt(exState.balances, rates) : null;
+  var portfolioOpen = (rates && openR) ? portfolioToUsdt(openR.snapshot, rates) : null;
+  var delta         = (portfolioNow !== null && portfolioOpen !== null) ? portfolioNow - portfolioOpen : null;
+
+  // Today's profit converted to USDT (approximate, using cached rates)
+  var todayProfitUsdt = null;
+  if (rates) {
+    todayProfitUsdt = 0;
+    CURS.forEach(function(c){
+      var v = todayProfits[c] || 0;
+      var r = c === 'usdt' ? 1 : (rates[c] || 0);
+      todayProfitUsdt += v * r;
+    });
+  }
+
+  var ratesAge = ratesFetchedAt
+    ? Math.round((Date.now() - ratesFetchedAt) / 60000) + ' мин назад'
+    : 'не загружены';
+
+  var dSign = delta >= 0 ? '+' : '';
+  var dCol  = delta >= 0 ? 'var(--green)' : 'var(--red)';
+  var pSign = todayProfitUsdt >= 0 ? '+' : '';
+  var pCol  = todayProfitUsdt >= 0 ? 'var(--green)' : 'var(--red)';
+
+  var roundBadge = openR
+    ? '<span class="pnl-round-badge">● ' + openR.name + '</span>'
+    : '<span style="font-size:9px;color:var(--muted);margin-left:6px">нет раунда</span>';
+
+  var html = '<div class="pnl-panel">'
+    // Today deals count
+    + '<div class="pnl-block">'
+    + '<div class="pnl-lbl">Сегодня' + roundBadge + '</div>'
+    + '<div class="pnl-val" style="color:var(--text)">' + todayDeals.length + ' сделок</div>'
+    + '<div class="pnl-sub">' + todayStr + '</div>'
+    + '</div>'
+
+    + '<div class="pnl-divider"></div>'
+
+    // Today profit in USDT (mark-to-market)
+    + '<div class="pnl-block">'
+    + '<div class="pnl-lbl">Профит сегодня ≈</div>'
+    + '<div class="pnl-val" style="color:' + (todayProfitUsdt !== null ? pCol : 'var(--muted)') + '">'
+    + (todayProfitUsdt !== null ? pSign + todayProfitUsdt.toFixed(2) + ' USDT' : '— USDT') + '</div>'
+    + '<div class="pnl-sub">по текущему курсу</div>'
+    + '</div>'
+
+    + '<div class="pnl-divider"></div>'
+
+    // Portfolio delta since round opened
+    + '<div class="pnl-block">'
+    + '<div class="pnl-lbl">Δ с открытия раунда</div>'
+    + '<div class="pnl-val" style="color:' + (delta !== null ? dCol : 'var(--muted)') + '">'
+    + (delta !== null ? dSign + delta.toFixed(2) + ' USDT' : '—') + '</div>'
+    + '<div class="pnl-sub">'
+    + (portfolioNow !== null ? 'портфель: ' + portfolioNow.toFixed(0) + ' USDT' : 'обновите курс') + '</div>'
+    + '</div>'
+
+    + '<div class="pnl-divider"></div>'
+
+    // Native profits today
+    + '<div class="pnl-block">'
+    + '<div class="pnl-lbl">Прибыль в валютах</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:2px">'
+    + CURS.map(function(c){
+        var v = todayProfits[c];
+        if (!v || Math.abs(v) < 0.001) return '';
+        var col = v >= 0 ? CLR[c] : 'var(--red)';
+        return '<span style="font-size:11px;font-weight:700;color:'+col+'">'+(v>=0?'+':'')+fmt(v,c)+'</span>';
+      }).join('')
+    + (Object.keys(todayProfits).length === 0 ? '<span style="color:var(--muted);font-size:11px">нет</span>' : '')
+    + '</div>'
+    + '</div>'
+
+    // Refresh button
+    + '<button class="pnl-refresh" id="btn-pnl-refresh">⟳ Обновить курс<br><span style="font-size:9px;color:var(--muted)">' + ratesAge + '</span></button>'
+    + '</div>';
+
+  panel.innerHTML = html;
+
+  document.getElementById('btn-pnl-refresh').addEventListener('click', function() {
+    var btn = document.getElementById('btn-pnl-refresh');
+    btn.innerHTML = '<span class="spin">⟳</span> Загрузка...';
+    btn.disabled = true;
+    fetchAllRatesUsdt().then(function(rates) {
+      cachedRates = rates;
+      ratesFetchedAt = Date.now();
+      renderDailyPnl();
+    }).catch(function() {
+      btn.innerHTML = '⟳ Обновить курс<br><span style="font-size:9px;color:var(--red)">ошибка</span>';
+      btn.disabled = false;
+    });
+  });
+}
 // Called after every deal to check if any round opened/closed
 // ================================================================
 // NAV
@@ -613,7 +744,7 @@ function renderExAssets() {
   CURS.forEach(function(c) {
     var bal = exState.balances[c];
     var pr  = exState.profits[c];
-    var cp  = cap(c);
+    var cp  = cap(c); // now = net cashflows
     var ps  = pr>=0?'+':'';
     var pcls = pr>=0?'pos':'neg';
     var badge = inRound ? '<div class="round-badge rb-open">● РАУНД</div>' : '';
@@ -622,7 +753,7 @@ function renderExAssets() {
       + badge
       +'<div class="c-name">'+c.toUpperCase()+'</div>'
       +'<div class="c-val">'+fmt(bal,c)+'</div>'
-      +'<div class="c-sub">капитал: '+fmt(cp,c)+'</div>'
+      +(cp !== 0 ? '<div class="c-sub">вложено: '+fmt(cp,c)+'</div>' : '')
       +'<div class="c-sub '+pcls+'">профит: '+ps+fmt(pr,c)+'</div>'
       +'</div>';
   });
@@ -807,10 +938,11 @@ function renderExLog() {
 }
 
 function renderExchange() {
-  try { renderExAssets(); } catch(e){ console.error('renderExAssets:', e); }
-  try { renderExAgents(); } catch(e){ console.error('renderExAgents:', e); }
-  try { renderExCharts(); } catch(e){ console.error('renderExCharts:', e); }
-  try { renderExLog();    } catch(e){ console.error('renderExLog:', e); }
+  try { renderExAssets();   } catch(e){ console.error('renderExAssets:', e); }
+  try { renderDailyPnl();   } catch(e){ console.error('renderDailyPnl:', e); }
+  try { renderExAgents();   } catch(e){ console.error('renderExAgents:', e); }
+  try { renderExCharts();   } catch(e){ console.error('renderExCharts:', e); }
+  try { renderExLog();      } catch(e){ console.error('renderExLog:', e); }
   try { if(document.getElementById("cf-log")) renderCfLog(); } catch(e){ console.error('renderCfLog:', e); }
 }
 
@@ -879,23 +1011,13 @@ function renderRounds() {
       +'<button class="btn btn-r" id="btn-close-round" style="width:100%;">⏹ Закрыть раунд и зафиксировать прибыль</button>'
       +'</div>';
   } else {
-    openHtml = '<div class="empty" style="margin-bottom:12px">Нет активного раунда</div>'
-      +'<div style="display:flex;gap:10px;">'
-      +'<input type="text" id="round-name-input" placeholder="Название раунда (необязательно)" '
-      +'style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);'
-      +'font-family:\'JetBrains Mono\',monospace;font-size:12px;padding:9px 11px;outline:none;">'
-      +'<button class="btn btn-g" id="btn-open-round" style="white-space:nowrap;">▶ Открыть раунд</button>'
-      +'</div>';
+    openHtml = '<div class="empty">Раунд откроется автоматически при первой сделке дня</div>';
   }
   document.getElementById('open-rounds').innerHTML = openHtml;
 
   // Wire buttons
   if (openR) {
     document.getElementById('btn-close-round').addEventListener('click', closeRound2);
-  } else {
-    document.getElementById('btn-open-round').addEventListener('click', openRound2);
-    var ni = document.getElementById('round-name-input');
-    if (ni) ni.addEventListener('keydown', function(e){ if(e.key==='Enter') openRound2(); });
   }
 
   // Closed rounds
@@ -934,6 +1056,9 @@ function renderRounds() {
       +'<span style="color:var(--muted);font-size:10px;margin-left:6px">('+sign+pct+'%)</span></div>'
       +'<div class="rp-item"><span class="rp-cur">портфель открытие→закрытие:</span>'
       +'<span style="color:var(--muted)">'+r.snapshotUsdt.toFixed(2)+' → '+r.closedUsdt.toFixed(2)+' USDT</span></div>'
+      +(r.cfAdjustment ? '<div class="rp-item"><span class="rp-cur">корр. капитала:</span>'
+        +'<span style="color:var(--muted)">'+(r.cfAdjustment>0?'-':'+')
+        +Math.abs(r.cfAdjustment).toFixed(2)+' USDT</span></div>' : '')
       + agentLines
       +'</div></div>';
   });
@@ -943,6 +1068,45 @@ function renderRounds() {
 // ================================================================
 // ROUNDS v2 — ACTIONS
 // ================================================================
+// Auto-open round silently on first deal — uses cached rates or fetches in background
+function autoOpenRound(triggerDeal) {
+  var snapshot = {};
+  CURS.forEach(function(c){ snapshot[c] = exState.balances[c] || 0; });
+
+  // Build best available rates from current deal + stored rate cache
+  var rates = {eur: 0, huf: 0, usd: 1, czk: 0};
+
+  // Inject rate from the triggering deal
+  var gc = triggerDeal.giveCur, rc = triggerDeal.getCur, rt = triggerDeal.rate;
+  // rt = 1 gc = rt rc  →  1 gc in USDT:
+  if (rc === 'usdt' || rc === 'usd') rates[gc] = rt;
+  else if (gc === 'usdt' || gc === 'usd') rates[rc] = 1 / rt;
+
+  var snapUsdt = portfolioToUsdt(snapshot, rates);
+  var name = 'День ' + today();
+
+  var round = {
+    id: triggerDeal.id - 1, // slightly before the deal id
+    name: name,
+    openedDate: today(),
+    openedTime: now(),
+    snapshot: snapshot,
+    snapshotUsdt: snapUsdt,
+    rates: rates,
+    status: 'open',
+    autoOpened: true
+  };
+  exState.rounds2.push(round);
+  exState.openRound2 = round.id;
+
+  // Fetch real rates in background and update snapshot silently
+  fetchAllRatesUsdt().then(function(realRates) {
+    round.rates = realRates;
+    round.snapshotUsdt = portfolioToUsdt(snapshot, realRates);
+    save();
+  }).catch(function(){});
+}
+
 function openRound2() {
   if (exState.openRound2) { alert('Сначала закрой текущий раунд.'); return; }
   var nameEl = document.getElementById('round-name-input');
@@ -1001,8 +1165,6 @@ function closeRound2() {
   var round = exState.rounds2.find(function(r){ return r.id === exState.openRound2; });
   if (!round) return;
 
-  if (!confirm('Закрыть раунд "'+round.name+'" и зафиксировать прибыль?')) return;
-
   var btn = document.getElementById('btn-close-round');
   if (btn) { btn.textContent = '⟳ Загрузка курсов...'; btn.disabled = true; }
 
@@ -1019,7 +1181,24 @@ function finalizeRound(round, closeRates) {
   var closedSnapshot = {};
   CURS.forEach(function(c){ closedSnapshot[c] = exState.balances[c] || 0; });
   var closedUsdt = portfolioToUsdt(closedSnapshot, closeRates);
-  var profitUsdt = closedUsdt - round.snapshotUsdt;
+
+  // Neutralize cashflows that happened INSIDE this round
+  // A deposit increases portfolio value but is not profit — subtract it
+  // A withdrawal decreases portfolio value but is not a loss — add it back
+  var cfAdjustment = 0;
+  (exState.cashflows || []).forEach(function(cf) {
+    // cashflows don't have timestamps, use their position — compare by date/time string
+    // We'll use the round's openedDate as boundary: include CFs on or after opening
+    // Since CFs only have date (not time), we include all CFs on openedDate and after
+    if (!cf._id) return; // skip CFs without id (old data)
+    if (cf._id < round.id) return; // before round opened
+    var rate = cf.cur === 'usdt' ? 1 : (closeRates[cf.cur] || 0);
+    var usdtVal = cf.amt * rate;
+    if (cf.type === 'in')  cfAdjustment += usdtVal; // deposit → not profit, subtract
+    if (cf.type === 'out') cfAdjustment -= usdtVal; // withdrawal → not loss, add back
+  });
+
+  var profitUsdt = closedUsdt - round.snapshotUsdt - cfAdjustment;
 
   // Agent breakdown: distribute profit proportionally to deals since round opened
   var dealsSince = exState.deals.filter(function(d){ return d.id >= round.id; });
@@ -1039,23 +1218,23 @@ function finalizeRound(round, closeRates) {
       agentBreakdown['owner'] += profitUsdt * weight * (1 - agentFrac);
     });
   } else {
-    // No deals — all profit to owner
     agentBreakdown['owner'] = profitUsdt;
   }
 
-  round.status        = 'closed';
-  round.closedDate    = today();
-  round.closedTime    = now();
-  round.closedUsdt    = closedUsdt;
-  round.closeRates    = closeRates;
-  round.profitUsdt    = profitUsdt;
+  round.status         = 'closed';
+  round.closedDate     = today();
+  round.closedTime     = now();
+  round.closedUsdt     = closedUsdt;
+  round.closeRates     = closeRates;
+  round.cfAdjustment   = cfAdjustment;
+  round.profitUsdt     = profitUsdt;
   round.agentBreakdown = agentBreakdown;
 
   exState.openRound2 = null;
   save();
   renderRounds();
-  // Also refresh agent cards (realized USDT updated)
   renderExAgents();
+  try { renderDailyPnl(); } catch(e){}
 }
 
 // ================================================================
@@ -1269,9 +1448,6 @@ document.getElementById('ex-rate').addEventListener('input',     function(){ cal
 document.getElementById('ex-spread').addEventListener('input',   function(){ calcHint('spread'); });
 updateRateLabel();
 
-CURS.forEach(function(c) {
-  document.getElementById('cap-'+c).addEventListener('input', syncCapital);
-});
 document.getElementById('btn-agent-cfg').addEventListener('click', function(){ openAgentModal(); });
 
 function addExDeal() {
@@ -1300,6 +1476,12 @@ function addExDeal() {
     rate:rt, profit:profit, pct:pct, agent:agent, client:client, note:note,
     date:today(), time:now()
   };
+
+  // Auto-open round on first deal if no round is open
+  if (!exState.openRound2) {
+    autoOpenRound(deal);
+  }
+
   exState.deals.push(deal);
 
   // rebuildRounds recalculates everything: balances, profits, agentProfit, rounds
@@ -1366,7 +1548,7 @@ function rebuildRounds() {
     exState.agentProfit['owner'][d.getCur] += d.profit * (1 - agentFrac);
   });
 
-  // Apply cashflows to capital
+  // Apply cashflows
   var cfCap = {eur:0,huf:0,usdt:0,usd:0,czk:0};
   (exState.cashflows||[]).forEach(function(cf) {
     if (cf.type === 'in')  cfCap[cf.cur] += cf.amt;
@@ -1374,7 +1556,7 @@ function rebuildRounds() {
   });
 
   CURS.forEach(function(c) {
-    exState.balances[c] = cap(c) + cfCap[c] + tempBal[c];
+    exState.balances[c] = cfCap[c] + tempBal[c];
   });
 }
 
@@ -1428,7 +1610,7 @@ document.getElementById('btn-cf-add').addEventListener('click', function() {
   var note = document.getElementById('cf-note').value.trim();
   if (!amt) { alert('Введи сумму'); return; }
   if (!exState.cashflows) exState.cashflows = [];
-  exState.cashflows.push({type:type, cur:cur, amt:amt, note:note, date:today()});
+  exState.cashflows.push({_id: Date.now(), type:type, cur:cur, amt:amt, note:note, date:today()});
   document.getElementById('cf-amt').value = '';
   document.getElementById('cf-note').value = '';
   // Update capital input to reflect new base
@@ -1910,15 +2092,17 @@ document.getElementById('sh-log').addEventListener('click', function(e){
 // ================================================================
 load();
 loadAgentCfg();
-// Sync DOM fields from saved state
-CURS.forEach(function(c) {
-  var el = document.getElementById('cap-'+c);
-  if (el) el.value = exState.capital[c] !== undefined ? exState.capital[c] : 0;
-});
 
 populateAgentSelect();
 rebuildRounds();
 renderExchange();
+
+// Auto-fetch rates on startup for daily P&L panel
+fetchAllRatesUsdt().then(function(rates) {
+  cachedRates = rates;
+  ratesFetchedAt = Date.now();
+  renderDailyPnl();
+}).catch(function(){});
 </script>
 
 <!-- ===== AGENTS CONFIG MODAL ===== -->
