@@ -3,476 +3,2347 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Поток прибыли обменника</title>
+<title>Business Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Unbounded:wght@400;700&display=swap" media="print" onload="this.media='all'">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Manrope:wght@300;500;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#070a10;--s1:#0c1018;--border:#1a2540;
+  --eur:#4f8ef7;--huf:#f0a732;--usdt:#26d9a0;--usd:#ff5c7a;--czk:#b48bf7;
+  --uah:#ffd166;--a1:#26d9a0;--a2:#4f8ef7;
+  --text:#dde4f0;--muted:#4a5878;--green:#26d9a0;--red:#ff5c7a;--gold:#ffd166;
+  --orange:#fb923c;
+}
+body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;min-height:100vh;}
 
-  :root {
-    --bg: #0a0e1a;
-    --surface: #111827;
-    --border: #1e2d45;
-    --eur: #3b82f6;
-    --huf: #f59e0b;
-    --usdt: #10b981;
-    --usd: #f43f5e;
-    --czk: #a78bfa;
-    --profit: #a78bfa;
-    --text: #e2e8f0;
-    --muted: #64748b;
-  }
+/* NAV */
+.nav{background:var(--s1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 24px;}
+.nav-logo{font-family:'Unbounded',sans-serif;font-size:11px;color:var(--green);padding:16px 20px 16px 0;border-right:1px solid var(--border);margin-right:4px;letter-spacing:.05em;}
+.nav-tab{padding:16px 18px;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;letter-spacing:.05em;}
+.nav-tab.active{color:var(--green);border-bottom-color:var(--green);}
+.nav-tab:hover:not(.active){color:var(--text);}
 
-  * { margin: 0; padding: 0; box-sizing: border-box; }
+/* PAGE */
+.page{display:none;padding:20px 24px;max-width:1200px;margin:0 auto;}
+.page.active{display:block;}
 
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'Manrope', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
+/* GRID */
+.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px;}
+.g2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
 
-  .noise {
-    position: fixed; inset: 0; pointer-events: none; z-index: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-    opacity: 0.4;
-  }
+/* CARD */
+.card{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:14px 13px;border-top:2px solid transparent;position:relative;}
+.card.eur{border-top-color:var(--eur);}.card.huf{border-top-color:var(--huf);}
+.card.usdt{border-top-color:var(--usdt);}.card.usd{border-top-color:var(--usd);}
+.card.czk{border-top-color:var(--czk);}.card.a1c{border-top-color:var(--a1);}
+.card.a2c{border-top-color:var(--a2);}.card.owner{border-top-color:var(--green);}
+.card.pa{border-top-color:var(--gold);}.card.pb{border-top-color:var(--usd);}
+.c-name{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px;}
+.c-val{font-size:15px;font-weight:700;margin-bottom:3px;}
+.c-sub{font-size:10px;color:var(--muted);margin-bottom:2px;}
+.c-sub.pos{color:var(--green);}.c-sub.neg{color:var(--red);}.c-sub.warn{color:var(--orange);}
 
-  .container {
-    position: relative; z-index: 1;
-    max-width: 1040px; margin: 0 auto;
-    padding: 48px 24px;
-  }
+/* ROUND STATUS BADGE */
+.round-badge{position:absolute;top:10px;right:10px;font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.05em;}
+.rb-open{background:rgba(251,146,60,.15);color:var(--orange);}
+.rb-closed{background:rgba(38,217,160,.15);color:var(--green);}
 
-  header { text-align: center; margin-bottom: 56px; }
-  header h1 {
-    font-family: 'Space Mono', monospace;
-    font-size: clamp(18px, 3vw, 26px);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: #fff;
-    margin-bottom: 8px;
-  }
-  header p { color: var(--muted); font-size: 14px; font-weight: 300; }
+/* SECTION */
+.section{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:16px;}
+.st{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:14px;}
 
-  .balances {
-    display: grid; grid-template-columns: repeat(5, 1fr);
-    gap: 12px; margin-bottom: 40px;
-  }
+/* FORM */
+.row{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:flex-end;}
+.field{display:flex;flex-direction:column;gap:4px;}
+.field label{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;}
+.field input,.field select,.field textarea{
+  background:var(--bg);border:1px solid var(--border);border-radius:7px;
+  color:var(--text);font-family:'JetBrains Mono',monospace;font-size:13px;
+  padding:9px 11px;outline:none;transition:border-color .2s;
+}
+.field select{appearance:none;}
+.field input:focus,.field select:focus{border-color:var(--green);}
+.field textarea{resize:none;height:36px;font-size:11px;}
+.fl{flex:2;min-width:120px;}.fs{flex:1;min-width:80px;}.fxs{width:90px;}
+.arrow{color:var(--muted);font-size:16px;padding-bottom:9px;flex-shrink:0;}
 
-  .asset-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 20px 14px;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-  .asset-card:hover { transform: translateY(-3px); }
-  .asset-card::before {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0; height: 3px;
-  }
-  .asset-card.eur::before  { background: var(--eur); }
-  .asset-card.huf::before  { background: var(--huf); }
-  .asset-card.usdt::before { background: var(--usdt); }
-  .asset-card.usd::before  { background: var(--usd); }
-  .asset-card.czk::before  { background: var(--czk); }
+/* BTN */
+.btn{padding:9px 15px;border:none;border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:.04em;}
+.btn-g{background:var(--green);color:#070a10;}.btn-g:hover{opacity:.85;}
+.btn-full{width:100%;padding:13px;}
+.btn-o{background:none;border:1px solid var(--border);color:var(--muted);}
+.btn-o:hover{color:var(--text);border-color:var(--text);}
+.btn-r{background:none;border:1px solid var(--red);color:var(--red);}
+.btn-r:hover{opacity:.8;}
+.btn-y{background:none;border:1px solid var(--gold);color:var(--gold);}
+.btn-y:hover{opacity:.8;}
 
-  .asset-icon {
-    width: 40px; height: 40px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    margin: 0 auto 10px;
-    font-family: 'Space Mono', monospace;
-    font-size: 11px; font-weight: 700;
-  }
-  .eur  .asset-icon { background: rgba(59,130,246,0.15);  color: var(--eur); }
-  .huf  .asset-icon { background: rgba(245,158,11,0.15);  color: var(--huf); }
-  .usdt .asset-icon { background: rgba(16,185,129,0.15);  color: var(--usdt); }
-  .usd  .asset-icon { background: rgba(244,63,94,0.15);   color: var(--usd); }
-  .czk  .asset-icon { background: rgba(167,139,250,0.15); color: var(--czk); }
+/* LOG */
+.log-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.log-title{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;}
+.btn-row{display:flex;gap:7px;}
+.log-list{display:flex;flex-direction:column;gap:7px;}
+.li{background:var(--s1);border:1px solid var(--border);border-radius:9px;padding:11px 13px;
+  display:grid;grid-template-columns:32px 1fr auto auto;gap:10px;align-items:center;
+  animation:fi .2s ease;}
+@keyframes fi{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.li-n{font-size:10px;color:var(--muted);background:var(--bg);border-radius:5px;padding:3px 6px;text-align:center;}
+.li-m{font-size:12px;margin-bottom:2px;line-height:1.6;}
+.li-s{font-size:10px;color:var(--muted);}
+.li-p{text-align:right;white-space:nowrap;}
+.li-pv{font-size:12px;font-weight:700;}
+.li-pp{font-size:10px;color:var(--muted);}
+.db{background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:3px;}
+.db:hover{color:var(--red);}
+.empty{text-align:center;padding:24px;color:var(--muted);font-size:11px;border:1px dashed var(--border);border-radius:9px;}
 
-  .asset-name { font-size: 11px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+/* TAGS */
+.tag{display:inline-block;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;margin:0 2px;vertical-align:middle;}
+.t-eur{background:rgba(79,142,247,.15);color:var(--eur);}
+.t-huf{background:rgba(240,167,50,.15);color:var(--huf);}
+.t-usdt{background:rgba(38,217,160,.15);color:var(--usdt);}
+.t-usd{background:rgba(255,92,122,.15);color:var(--usd);}
+.t-czk{background:rgba(180,139,247,.15);color:var(--czk);}
+.t-uah{background:rgba(255,209,102,.15);color:var(--uah);}
+.ab{display:inline-block;border-radius:4px;padding:2px 7px;font-size:10px;font-weight:700;margin-left:5px;}
+.ab-a1{background:rgba(38,217,160,.15);color:var(--a1);}
+.ab-a2{background:rgba(79,142,247,.15);color:var(--a2);}
 
-  .asset-balance {
-    font-family: 'Space Mono', monospace;
-    font-size: clamp(13px, 1.8vw, 18px);
-    font-weight: 700; color: #fff;
-    transition: all 0.4s;
-  }
+/* SETTINGS */
+.settings-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.si{display:flex;align-items:center;gap:7px;background:var(--s1);border:1px solid var(--border);border-radius:8px;padding:7px 11px;}
+.si label{font-size:9px;color:var(--muted);}
+.si input{background:none;border:none;color:var(--green);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;width:72px;outline:none;}
 
-  .asset-profit {
-    font-size: 11px; margin-top: 5px;
-    font-family: 'Space Mono', monospace;
-    transition: all 0.4s;
-  }
-  .profit-pos  { color: var(--usdt); }
-  .profit-neg  { color: #f87171; }
-  .profit-zero { color: var(--muted); }
+/* CHARTS */
+.charts-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
+.chart-card{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+.chart-title{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;}
+.bar-chart{display:flex;flex-direction:column;gap:7px;}
+.bar-row{display:flex;align-items:center;gap:8px;}
+.bar-lbl{font-size:10px;color:var(--muted);width:72px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bar-track{flex:1;background:var(--bg);border-radius:3px;height:7px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;transition:width .4s ease;}
+.bar-val{font-size:10px;font-weight:600;width:90px;text-align:right;flex-shrink:0;}
 
-  .deal-panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 28px;
-    margin-bottom: 28px;
-  }
+/* ROUNDS */
+.round-item{background:var(--s1);border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:7px;}
+.round-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+.round-title{font-size:11px;font-weight:700;}
+.round-meta{font-size:10px;color:var(--muted);}
+.round-profits{display:flex;gap:12px;flex-wrap:wrap;}
+.rp-item{font-size:11px;}
+.rp-cur{color:var(--muted);margin-right:4px;}
 
-  .deal-panel h2 {
-    font-size: 13px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.1em; color: var(--muted); margin-bottom: 20px;
-  }
+/* DIVIDER */
+.div{height:1px;background:var(--border);margin:16px 0;}
 
-  .deal-row {
-    display: grid; grid-template-columns: 1fr 100px auto 1fr 100px;
-    gap: 10px; align-items: end; margin-bottom: 20px;
-  }
+/* SHOP */
+.avg-box{background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:flex;gap:20px;flex-wrap:wrap;}
+.avg-item .av-lbl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px;}
+.avg-item .av-val{font-size:13px;font-weight:700;color:var(--gold);}
+.avg-item .av-val.green{color:var(--green);}
 
-  .field label {
-    display: block; font-size: 11px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--muted); margin-bottom: 7px;
-  }
+@media(max-width:800px){
+  .g5,.g3{grid-template-columns:repeat(2,1fr);}
+  .charts-grid{grid-template-columns:1fr;}
+  .arrow{display:none;}
+}
 
-  .field select, .field input {
-    width: 100%;
-    background: #0d1526;
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: #fff;
-    font-family: 'Space Mono', monospace;
-    font-size: 13px;
-    padding: 11px 12px;
-    outline: none;
-    transition: border-color 0.2s;
-    appearance: none;
-  }
-  .field select:focus, .field input:focus { border-color: var(--profit); }
-
-  .arrow-label {
-    font-size: 20px; color: var(--muted);
-    padding-bottom: 12px; text-align: center;
-  }
-
-  .market-row { margin-bottom: 20px; }
-  .market-row .field { max-width: 320px; }
-
-  .btn-deal {
-    width: 100%;
-    background: linear-gradient(135deg, #6d28d9, #4f46e5);
-    border: none; border-radius: 12px;
-    color: #fff; font-family: 'Manrope', sans-serif;
-    font-size: 15px; font-weight: 700;
-    padding: 15px; cursor: pointer;
-    transition: opacity 0.2s, transform 0.1s;
-  }
-  .btn-deal:hover { opacity: 0.9; }
-  .btn-deal:active { transform: scale(0.98); }
-
-  .log-section h2 {
-    font-size: 13px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.1em; color: var(--muted); margin-bottom: 14px;
-  }
-
-  .log-list { display: flex; flex-direction: column; gap: 8px; }
-
-  .log-item {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 14px 18px;
-    display: grid;
-    grid-template-columns: auto 1fr auto;
-    gap: 14px; align-items: center;
-    animation: slideIn 0.3s ease;
-  }
-  @keyframes slideIn {
-    from { opacity: 0; transform: translateY(-8px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  .log-num {
-    font-family: 'Space Mono', monospace;
-    font-size: 11px; color: var(--muted);
-    background: #0d1526; border-radius: 6px;
-    padding: 4px 8px; min-width: 32px; text-align: center;
-  }
-
-  .log-desc { font-size: 13px; color: var(--text); line-height: 1.6; }
-
-  .log-profit {
-    font-family: 'Space Mono', monospace;
-    font-size: 13px; font-weight: 700;
-    text-align: right; white-space: nowrap;
-  }
-
-  .tag {
-    display: inline-block; border-radius: 5px;
-    padding: 2px 7px; font-size: 11px; font-weight: 700;
-    font-family: 'Space Mono', monospace;
-    vertical-align: middle; margin: 0 2px;
-  }
-  .tag-eur  { background: rgba(59,130,246,0.15);  color: var(--eur); }
-  .tag-huf  { background: rgba(245,158,11,0.15);  color: var(--huf); }
-  .tag-usdt { background: rgba(16,185,129,0.15);  color: var(--usdt); }
-  .tag-usd  { background: rgba(244,63,94,0.15);   color: var(--usd); }
-  .tag-czk  { background: rgba(167,139,250,0.15); color: var(--czk); }
-
-  .empty-log {
-    text-align: center; padding: 40px;
-    color: var(--muted); font-size: 14px;
-    border: 1px dashed var(--border); border-radius: 12px;
-  }
-
-  .reset-btn {
-    background: none; border: 1px solid var(--border);
-    border-radius: 8px; color: var(--muted);
-    font-size: 12px; padding: 8px 16px;
-    cursor: pointer; margin-top: 14px;
-    font-family: 'Manrope', sans-serif;
-    transition: color 0.2s, border-color 0.2s;
-  }
-  .reset-btn:hover { color: #f87171; border-color: #f87171; }
-
-  .summary-bar {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 18px 22px;
-    margin-bottom: 28px;
-    display: flex; gap: 24px; flex-wrap: wrap;
-    align-items: center;
-  }
-  .summary-bar .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
-  .summary-bar .val   { font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; color: var(--profit); }
-
-  @media (max-width: 700px) {
-    .deal-row { grid-template-columns: 1fr 1fr; }
-    .arrow-label { display: none; }
-    .balances { grid-template-columns: repeat(2, 1fr); }
-  }
-  @media (max-width: 400px) {
-    .balances { grid-template-columns: 1fr; }
-  }
+/* AGENT CONFIG */
+.agent-cfg-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;}
+.agent-cfg-row.owner-row{border-color:var(--green);opacity:.8;}
+.agent-cfg-name{background:none;border:none;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;width:110px;outline:none;border-bottom:1px solid var(--border);}
+.agent-cfg-name:focus{border-bottom-color:var(--green);}
+.agent-cfg-pct{background:none;border:none;color:var(--green);font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;width:48px;text-align:right;outline:none;}
+.agent-cfg-pct:focus{color:var(--gold);}
+.agent-cfg-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;margin-left:auto;padding:2px 6px;}
+.agent-cfg-del:hover{color:var(--red);}
+.owner-remainder{font-size:11px;color:var(--muted);flex:1;text-align:right;}
+.owner-remainder.warn{color:var(--red);}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(7,10,16,.85);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;}
+.modal-overlay.hidden{display:none;}
+.modal{background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:28px 28px 22px;width:520px;max-width:95vw;max-height:90vh;overflow-y:auto;}
+.modal-title{font-family:'Unbounded',sans-serif;font-size:12px;color:var(--green);margin-bottom:20px;letter-spacing:.05em;}
+.modal-close{float:right;background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;margin-top:-4px;padding:0 4px;}
+.modal-close:hover{color:var(--text);}
+.modal .field{margin-bottom:12px;}
+.modal .field input{width:100%;}
+.modal-hint{font-size:10px;color:var(--muted);line-height:1.6;margin-bottom:16px;background:var(--bg);border-radius:8px;padding:10px 13px;border:1px solid var(--border);}
+.modal-hint code{color:var(--gold);}
+.modal-hint a{color:var(--eur);text-decoration:none;}
+.modal-hint a:hover{text-decoration:underline;}
+.import-row{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:7px;font-size:11px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.import-row.dup{opacity:.4;}
+.import-row.new{border-color:var(--green);}
+.import-row-left{line-height:1.6;}
+.import-row-badge{font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0;}
+.ib-new{background:rgba(38,217,160,.15);color:var(--green);}
+.ib-dup{background:rgba(74,88,120,.2);color:var(--muted);}
+.import-summary{font-size:11px;color:var(--text);margin-bottom:14px;padding:9px 13px;background:var(--bg);border-radius:8px;border:1px solid var(--border);}
+.spin{display:inline-block;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
 </style>
 </head>
 <body>
-<div class="noise"></div>
-<div class="container">
 
-  <header>
-    <h1>Поток прибыли обменника</h1>
-    <p>EUR · HUF · USDT · USD · CZK — прибыль фиксируется в момент каждой сделки</p>
-  </header>
+<nav class="nav">
+  <div class="nav-logo">TRACKER</div>
+  <div class="nav-tab active" id="ntab-exchange">ОБМЕННИК</div>
+  <div class="nav-tab" id="ntab-rounds">РАУНДЫ</div>
+  <div class="nav-tab" id="ntab-shop">МАГАЗИН</div>
+</nav>
 
-  <div class="balances">
-    <div class="asset-card eur">
-      <div class="asset-icon">€</div>
-      <div class="asset-name">Euro</div>
-      <div class="asset-balance" id="bal-eur">0.00</div>
-      <div class="asset-profit profit-zero" id="prof-eur">прибыль: 0.00</div>
-    </div>
-    <div class="asset-card huf">
-      <div class="asset-icon">Ft</div>
-      <div class="asset-name">Forint</div>
-      <div class="asset-balance" id="bal-huf">0</div>
-      <div class="asset-profit profit-zero" id="prof-huf">прибыль: 0</div>
-    </div>
-    <div class="asset-card usdt">
-      <div class="asset-icon">$T</div>
-      <div class="asset-name">USDT</div>
-      <div class="asset-balance" id="bal-usdt">0.00</div>
-      <div class="asset-profit profit-zero" id="prof-usdt">прибыль: 0.00</div>
-    </div>
-    <div class="asset-card usd">
-      <div class="asset-icon">$</div>
-      <div class="asset-name">USD</div>
-      <div class="asset-balance" id="bal-usd">0.00</div>
-      <div class="asset-profit profit-zero" id="prof-usd">прибыль: 0.00</div>
-    </div>
-    <div class="asset-card czk">
-      <div class="asset-icon">Kč</div>
-      <div class="asset-name">Koruna</div>
-      <div class="asset-balance" id="bal-czk">0.00</div>
-      <div class="asset-profit profit-zero" id="prof-czk">прибыль: 0.00</div>
-    </div>
+<!-- ===== EXCHANGE ===== -->
+<div class="page active" id="page-exchange">
+
+  <div class="settings-row" style="padding-top:16px">
+    <div class="si"><label>EUR капитал</label><input type="number" id="cap-eur" value="3000"></div>
+    <div class="si"><label>HUF капитал</label><input type="number" id="cap-huf" value="2000000"></div>
+    <div class="si"><label>USDT капитал</label><input type="number" id="cap-usdt" value="3000"></div>
+    <div class="si"><label>USD капитал</label><input type="number" id="cap-usd" value="0"></div>
+    <div class="si"><label>CZK капитал</label><input type="number" id="cap-czk" value="0"></div>
+    <div class="si" style="cursor:pointer;" id="btn-agent-cfg"><label style="cursor:pointer;">Агенты</label><span id="agents-summary" style="color:var(--green);font-size:12px;font-weight:700;">⚙</span></div>
   </div>
 
-  <div class="summary-bar" id="summary-bar" style="display:none">
-    <div><div class="label">Сделок</div><div class="val" id="sum-deals">0</div></div>
-    <div><div class="label">EUR</div><div class="val" id="sum-eur">0.00 €</div></div>
-    <div><div class="label">HUF</div><div class="val" id="sum-huf">0 Ft</div></div>
-    <div><div class="label">USDT</div><div class="val" id="sum-usdt">0.00</div></div>
-    <div><div class="label">USD</div><div class="val" id="sum-usd">0.00 $</div></div>
-    <div><div class="label">CZK</div><div class="val" id="sum-czk">0.00 Kč</div></div>
-  </div>
+  <!-- ASSET CARDS -->
+  <div class="g5" id="ex-assets"></div>
 
-  <div class="deal-panel">
-    <h2>Новая сделка</h2>
-    <div class="deal-row">
-      <div class="field">
-        <label>Ты отдаёшь</label>
-        <input type="number" id="give-amount" placeholder="1850" min="0" step="any">
-      </div>
-      <div class="field">
-        <label>Валюта</label>
-        <select id="give-cur">
-          <option value="eur">EUR €</option>
-          <option value="huf">HUF Ft</option>
-          <option value="usdt">USDT</option>
-          <option value="usd">USD $</option>
-          <option value="czk">CZK Kč</option>
+  <!-- AGENT CARDS -->
+  <div class="g2" id="ex-agents"></div>
+
+  <!-- DEAL FORM -->
+  <div class="section">
+    <div class="st">Новая сделка</div>
+    <div class="row">
+      <div class="field fl"><label>Ты отдаёшь</label><input type="number" id="ex-give-amt" placeholder="20000"></div>
+      <div class="field fxs"><label>Валюта</label>
+        <select id="ex-give-cur">
+          <option value="eur">EUR</option><option value="huf">HUF</option>
+          <option value="usdt">USDT</option><option value="usd">USD</option><option value="czk">CZK</option>
         </select>
       </div>
-      <div class="arrow-label">→</div>
-      <div class="field">
-        <label>Клиент отдаёт</label>
-        <input type="number" id="get-amount" placeholder="2188" min="0" step="any">
-      </div>
-      <div class="field">
-        <label>Валюта</label>
-        <select id="get-cur">
-          <option value="usdt">USDT</option>
-          <option value="eur">EUR €</option>
-          <option value="huf">HUF Ft</option>
-          <option value="usd">USD $</option>
-          <option value="czk">CZK Kč</option>
+      <div class="arrow">→</div>
+      <div class="field fl"><label>Клиент отдаёт</label><input type="number" id="ex-get-amt" placeholder="22400"></div>
+      <div class="field fxs"><label>Валюта</label>
+        <select id="ex-get-cur">
+          <option value="usdt">USDT</option><option value="eur">EUR</option>
+          <option value="huf">HUF</option><option value="usd">USD</option><option value="czk">CZK</option>
         </select>
       </div>
     </div>
-
-    <div class="market-row">
-      <div class="field">
-        <label>Рыночный курс (1 <span id="market-base-label">USDT</span> = ? <span id="market-quote-label">EUR</span>)</label>
-        <input type="number" id="market-rate" placeholder="0.92" step="any">
+    <div class="row">
+      <div class="field fl">
+        <label id="ex-rate-lbl">Рыночный курс (1 EUR = ? USDT)</label>
+        <div style="display:flex;gap:6px;">
+          <input type="number" id="ex-rate" placeholder="1.08" style="flex:1">
+          <button class="btn btn-o" id="btn-fetch-rate" style="padding:9px 10px;font-size:10px;white-space:nowrap">⟳ Курс</button>
+        </div>
+        <div id="ex-rate-source" style="font-size:9px;color:var(--muted);margin-top:3px;min-height:14px;"></div>
       </div>
-    </div>
+      <div class="field fxs">
+        <label>Источник</label>
+        <select id="ex-rate-api">
+          <option value="auto">Авто</option>
+          <option value="frankfurter">Frankfurter</option>
+          <option value="coingecko">CoinGecko</option>
+        </select>
+      </div>
+      <div class="field fs"><label>Спред %</label><input type="number" id="ex-spread" placeholder="2.0" step="0.1"></div>
 
-    <button class="btn-deal" onclick="addDeal()">Зафиксировать сделку →</button>
+      <div class="field fxs"><label>Агент</label>
+        <select id="ex-agent"></select>
+      </div>
+      <div class="field fl"><label>Клиент</label><input type="text" id="ex-client" placeholder="@username"></div>
+      <div class="field fl"><label>Заметка</label><textarea id="ex-note" placeholder="..."></textarea></div>
+    </div>
+    <div id="ex-calc-hint" style="font-size:11px;color:var(--muted);margin-bottom:12px;min-height:18px;"></div>
+    <button class="btn btn-g btn-full" id="btn-ex-deal">ЗАФИКСИРОВАТЬ СДЕЛКУ →</button>
   </div>
 
-  <div class="log-section">
-    <h2>История сделок</h2>
-    <div class="log-list" id="log-list">
-      <div class="empty-log">Сделок пока нет — добавьте первую выше</div>
+  <!-- CASHFLOW -->
+  <div class="section">
+    <div class="st">Движение капитала</div>
+    <div class="row">
+      <div class="field fxs">
+        <label>Тип</label>
+        <select id="cf-type">
+          <option value="out">Вывод</option>
+          <option value="in">Пополнение</option>
+        </select>
+      </div>
+      <div class="field fxs">
+        <label>Валюта</label>
+        <select id="cf-cur">
+          <option value="usdt">USDT</option>
+          <option value="eur">EUR</option>
+          <option value="huf">HUF</option>
+          <option value="usd">USD</option>
+          <option value="czk">CZK</option>
+        </select>
+      </div>
+      <div class="field fl"><label>Сумма</label><input type="number" id="cf-amt" placeholder="5000"></div>
+      <div class="field fl"><label>Заметка</label><input type="text" id="cf-note" placeholder="вывод прибыли..."></div>
     </div>
-    <button class="reset-btn" onclick="resetAll()">Сбросить всё</button>
+    <button class="btn btn-g btn-full" id="btn-cf-add">ЗАФИКСИРОВАТЬ →</button>
+    <div class="log-list" id="cf-log" style="margin-top:12px"></div>
   </div>
 
+  <!-- CHARTS -->
+  <div class="charts-grid" id="ex-charts"></div>
+
+  <!-- LOG -->
+  <div class="log-hdr">
+    <div class="log-title">История сделок</div>
+    <div class="btn-row">
+      <button class="btn btn-y" id="btn-ex-undo">↩ Отмена</button>
+      <button class="btn btn-o" id="btn-ex-csv">↓ CSV</button>
+      <button class="btn btn-o" id="btn-ex-report">📋 Отчёт</button>
+      <button class="btn btn-o" id="btn-ex-export">↓ JSON</button>
+      <button class="btn btn-o" id="btn-ex-import">↑ JSON</button>
+      <input type="file" id="imp-file" accept=".json" style="display:none">
+      <button class="btn btn-g" id="btn-gsheets" style="font-size:10px;padding:9px 11px;">⬇ Google Sheets</button>
+      <button class="btn btn-r" id="btn-ex-reset">Сброс</button>
+    </div>
+  </div>
+  <div class="log-list" id="ex-log"></div>
+</div>
+
+<!-- ===== ROUNDS ===== -->
+<div class="page" id="page-rounds">
+  <div style="padding-top:16px"></div>
+
+  <!-- SUMMARY -->
+  <div class="g2" id="rounds-summary"></div>
+
+  <div class="div"></div>
+
+  <!-- OPEN ROUND -->
+  <div class="st" style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px">🟡 Текущий раунд</div>
+  <div id="open-rounds"></div>
+
+  <div class="div"></div>
+
+  <!-- CLOSED ROUNDS -->
+  <div class="st" style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px">🟢 Закрытые раунды</div>
+  <div id="closed-rounds"></div>
+</div>
+
+<!-- ===== SHOP ===== -->
+<div class="page" id="page-shop">
+  <div style="padding-top:16px"></div>
+
+  <div class="avg-box" id="shop-summary">
+    <div class="avg-item"><div class="av-lbl">UAH заходов</div><div class="av-val" id="sh-uah-total">0 ₴</div></div>
+    <div class="avg-item"><div class="av-lbl">Средний курс</div><div class="av-val" id="sh-avg-rate">—</div></div>
+    <div class="avg-item"><div class="av-lbl">USD в обороте</div><div class="av-val" id="sh-usd-pool">0 $</div></div>
+    <div class="avg-item"><div class="av-lbl">Себестоимость</div><div class="av-val" id="sh-cost-total">0 $</div></div>
+    <div class="avg-item"><div class="av-lbl">Прибыль</div><div class="av-val green" id="sh-profit-total">0 $</div></div>
+  </div>
+
+  <div class="g3" id="sh-agents"></div>
+
+  <div class="section">
+    <div class="st">Заход средств</div>
+    <div class="row">
+      <div class="field fxs"><label>Тип</label>
+        <select id="sh-income-type">
+          <option value="uah">Гривна → USD</option>
+          <option value="usd">Прямой USD</option>
+        </select>
+      </div>
+      <div class="field fl"><label id="sh-income-lbl">Сумма (UAH)</label><input type="number" id="sh-income-amt" placeholder="40000"></div>
+      <div class="field fl" id="sh-rate-wrap"><label>Курс UAH/USD</label><input type="number" id="sh-income-rate" placeholder="41.5"></div>
+      <div class="field fl" id="sh-usd-wrap"><label>Итого USD</label><input type="number" id="sh-income-usd" placeholder="963.86" readonly style="color:var(--gold)"></div>
+    </div>
+    <button class="btn btn-g btn-full" id="btn-sh-income">ДОБАВИТЬ ЗАХОД →</button>
+  </div>
+
+  <div class="section">
+    <div class="st">Продажа</div>
+    <div class="row">
+      <div class="field fl"><label>Сумма продажи</label><input type="number" id="sh-sale-amt" placeholder="1200"></div>
+      <div class="field fxs"><label>Валюта</label>
+        <select id="sh-sale-cur"><option value="usd">USD</option><option value="uah">UAH</option></select>
+      </div>
+      <div class="field fl" id="sh-sale-rate-wrap" style="display:none"><label>Курс UAH/USD</label><input type="number" id="sh-sale-rate" placeholder="41.5"></div>
+      <div class="field fl"><label>Себестоимость (USD)</label><input type="number" id="sh-cost" placeholder="800"></div>
+      <div class="field fl"><label>Заметка</label><textarea id="sh-note" placeholder="товар, клиент..."></textarea></div>
+    </div>
+    <button class="btn btn-g btn-full" id="btn-sh-sale">ЗАФИКСИРОВАТЬ ПРОДАЖУ →</button>
+  </div>
+
+  <div class="charts-grid" id="sh-charts"></div>
+
+  <div class="log-hdr">
+    <div class="log-title">История</div>
+    <div class="btn-row">
+      <button class="btn btn-y" id="btn-sh-undo">↩ Отмена</button>
+      <button class="btn btn-o" id="btn-sh-csv">↓ CSV</button>
+      <button class="btn btn-r" id="btn-sh-reset">Сброс</button>
+    </div>
+  </div>
+  <div class="log-list" id="sh-log"></div>
 </div>
 
 <script>
-  const CURRENCIES = ['eur','huf','usdt','usd','czk'];
-  const symbols = { eur: '€', huf: 'Ft', usdt: 'USDT', usd: '$', czk: 'Kč' };
+// ================================================================
+// CONSTANTS
+// ================================================================
+var CURS = ['eur','huf','usdt','usd','czk'];
+var SYM  = {eur:'€',huf:'Ft',usdt:'USDT',usd:'$',czk:'Kč',uah:'₴'};
+var CLR  = {eur:'var(--eur)',huf:'var(--huf)',usdt:'var(--usdt)',usd:'var(--usd)',czk:'var(--czk)'};
 
-  const state = {
-    balances: Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-    profits:  Object.fromEntries(CURRENCIES.map(c => [c, 0])),
-    deals: []
+// ================================================================
+// AGENT CONFIG (persisted separately from deal state)
+// ================================================================
+// agents = [{id:'a1', name:'Агент 1', pct:70}, ...]
+// owner  = {name:'Владелец'} — always present, receives remainder
+var DEFAULT_AGENTS = [
+  {id:'a1', name:'Агент 1', pct:70},
+  {id:'a2', name:'Агент 2', pct:30}
+];
+var agentCfg = {agents: DEFAULT_AGENTS, ownerName: 'Владелец'};
+
+function loadAgentCfg() {
+  try {
+    var s = localStorage.getItem('agentCfg_v1');
+    if (s) { var p = JSON.parse(s); if (p && p.agents) agentCfg = p; }
+  } catch(e){}
+}
+function saveAgentCfg() {
+  try { localStorage.setItem('agentCfg_v1', JSON.stringify(agentCfg)); } catch(e){}
+}
+
+// Returns agent config by id, or null
+function getAgent(id) {
+  if (id === 'owner') return {id:'owner', name: agentCfg.ownerName, pct: ownerPct()};
+  return agentCfg.agents.find(function(a){ return a.id === id; }) || null;
+}
+// Sum of all agent %
+function sumAgentPct() {
+  return agentCfg.agents.reduce(function(s,a){ return s + (parseFloat(a.pct)||0); }, 0);
+}
+// Owner gets the remainder
+function ownerPct() { return Math.max(0, 100 - sumAgentPct()); }
+
+// Populate the agent <select> in deal form
+function populateAgentSelect() {
+  var sel = document.getElementById('ex-agent');
+  var cur = sel.value;
+  sel.innerHTML = '';
+  // Owner first
+  var opt = document.createElement('option');
+  opt.value = 'owner'; opt.textContent = agentCfg.ownerName + ' (владелец)';
+  sel.appendChild(opt);
+  agentCfg.agents.forEach(function(a) {
+    var o = document.createElement('option');
+    o.value = a.id; o.textContent = a.name + ' (' + a.pct + '%)';
+    sel.appendChild(o);
+  });
+  // Restore selection if still valid
+  var ids = ['owner'].concat(agentCfg.agents.map(function(a){return a.id;}));
+  if (ids.indexOf(cur) !== -1) sel.value = cur;
+}
+
+// ================================================================
+// STATE
+// ================================================================
+function freshExState() {
+  return {
+    capital:     {eur:3000,huf:2000000,usdt:3000,usd:0,czk:0},
+    balances:    {eur:0,huf:0,usdt:0,usd:0,czk:0},
+    profits:     {eur:0,huf:0,usdt:0,usd:0,czk:0},
+    agentProfit: {},
+    rounds:      {eur:null,huf:null,usdt:null,usd:null,czk:null}, // legacy, kept for compat
+    closedRounds:[],   // legacy
+    rounds2:     [],   // new: [{id, name, openedDate, openedTime, snapshotUsdt, rates, status:'open'}, ...]
+    openRound2:  null, // id of currently open round, or null
+    deals:       [],
+    cashflows:   []
+  };
+}
+
+function freshShState() {
+  return {
+    incomes:[],
+    sales:[],
+    agentProfit:{owner:0,pa:0,pb:0},
+    usdPool:0,
+    totalCost:0,
+    totalProfit:0
+  };
+}
+
+var exState = freshExState();
+var shState = freshShState();
+
+// ================================================================
+// PERSIST
+// ================================================================
+function save() {
+  try {
+    localStorage.setItem('exState_v9', JSON.stringify(exState));
+    localStorage.setItem('shState_v8', JSON.stringify(shState));
+  } catch(e){}
+}
+function load() {
+  try {
+    var ex = localStorage.getItem('exState_v9') || localStorage.getItem('exState_v8');
+    var sh = localStorage.getItem('shState_v8');
+    if (ex) { var parsed = JSON.parse(ex); if (parsed && parsed.deals) exState = parsed; }
+    if (sh) { var parsedS = JSON.parse(sh); if (parsedS) shState = parsedS; }
+    if (!exState.rounds)       exState.rounds       = {eur:null,huf:null,usdt:null,usd:null,czk:null};
+    if (!exState.closedRounds) exState.closedRounds = [];
+    if (!exState.rounds2)      exState.rounds2      = [];
+    if (exState.openRound2 === undefined) exState.openRound2 = null;
+    if (!exState.agentProfit)  exState.agentProfit  = {};
+
+    // Migrate deals that have no agent field → assign to 'owner'
+    (exState.deals || []).forEach(function(d) {
+      if (!d.agent) d.agent = 'owner';
+      // migrate old 'a1'/'a2' agent ids if agentCfg doesn't have them
+      // (will be resolved after agentCfg loads; safe to leave as-is)
+    });
+    if (!exState.capital)      exState.capital      = {eur:3000,huf:2000000,usdt:3000,usd:0,czk:0};
+    if (!exState.deals)        exState.deals        = [];
+    if (!exState.cashflows)    exState.cashflows    = [];
+    if (!exState.balances)     exState.balances     = {eur:0,huf:0,usdt:0,usd:0,czk:0};
+    if (!exState.profits)      exState.profits      = {eur:0,huf:0,usdt:0,usd:0,czk:0};
+    if (!exState.agentProfit)  exState.agentProfit  = {};
+    ['eur','huf','usdt','usd','czk'].forEach(function(c){
+      if(exState.balances[c]===undefined) exState.balances[c]=0;
+      if(exState.profits[c]===undefined)  exState.profits[c]=0;
+      if(exState.capital[c]===undefined)  exState.capital[c]=0;
+    });
+  } catch(e) {
+    console.log('localStorage unavailable, using memory');
+  }
+}
+
+// ================================================================
+// HELPERS
+// ================================================================
+function fmt(v,c) {
+  if (c==='huf'||c==='czk'||c==='uah') return Math.round(v).toLocaleString('ru')+' '+SYM[c];
+  return parseFloat(v).toFixed(2)+' '+SYM[c];
+}
+function fmtU(v) { return parseFloat(v).toFixed(2)+' USDT'; }
+function cap(c)  { return exState.capital[c] || 0; }
+
+// Convert full balance snapshot to USDT using provided rates object {eur:X, huf:X, usd:X, czk:X}
+// rates = how many USDT per 1 unit of currency
+function portfolioToUsdt(balances, rates) {
+  var total = 0;
+  CURS.forEach(function(c) {
+    var bal = balances[c] || 0;
+    var rate = (c === 'usdt') ? 1 : (rates[c] || 0);
+    total += bal * rate;
+  });
+  return total;
+}
+
+// Fetch all rates vs USDT from Frankfurter and return promise {eur, huf, usd, czk}
+function fetchAllRatesUsdt() {
+  // Frankfurter: get USD rates for EUR, HUF, CZK (USDT≈USD)
+  return fetch('https://api.frankfurter.app/latest?from=USD&to=EUR,HUF,CZK')
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      var rates = data.rates || {};
+      // rates from Frankfurter are: 1 USD = X EUR, etc.
+      // we need: 1 EUR = Y USDT, so invert
+      return {
+        usd: 1,
+        eur: rates.EUR ? 1/rates.EUR : 0,
+        huf: rates.HUF ? 1/rates.HUF : 0,
+        czk: rates.CZK ? 1/rates.CZK : 0
+      };
+    });
+}
+
+// Sync DOM capital inputs -> exState.capital, then rebuild
+function syncCapital() {
+  ['eur','huf','usdt','usd','czk'].forEach(function(c) {
+    exState.capital[c] = parseFloat(document.getElementById('cap-'+c).value)||0;
+  });
+  rebuildRounds();
+  renderExchange();
+}
+function today() { return new Date().toLocaleDateString('ru',{day:'2-digit',month:'2-digit'}); }
+function now()   { return new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'}); }
+
+// ================================================================
+// ROUND LOGIC
+// ================================================================
+// Called after every deal to check if any round opened/closed
+// ================================================================
+// NAV
+// ================================================================
+document.getElementById('ntab-exchange').addEventListener('click', function() {
+  switchPage('exchange'); this.parentNode.querySelectorAll('.nav-tab').forEach(function(t){t.classList.remove('active');});
+  document.getElementById('ntab-exchange').classList.add('active');
+});
+document.getElementById('ntab-rounds').addEventListener('click', function() {
+  switchPage('rounds');
+  document.querySelectorAll('.nav-tab').forEach(function(t){t.classList.remove('active');});
+  this.classList.add('active');
+  renderRounds();
+});
+document.getElementById('ntab-shop').addEventListener('click', function() {
+  switchPage('shop');
+  document.querySelectorAll('.nav-tab').forEach(function(t){t.classList.remove('active');});
+  this.classList.add('active');
+  renderShop();
+});
+
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
+  document.getElementById('page-'+name).classList.add('active');
+}
+
+// ================================================================
+// EXCHANGE — RENDER
+// ================================================================
+function renderExAssets() {
+  var h = '';
+  var inRound = !!exState.openRound2;
+  CURS.forEach(function(c) {
+    var bal = exState.balances[c];
+    var pr  = exState.profits[c];
+    var cp  = cap(c);
+    var ps  = pr>=0?'+':'';
+    var pcls = pr>=0?'pos':'neg';
+    var badge = inRound ? '<div class="round-badge rb-open">● РАУНД</div>' : '';
+
+    h += '<div class="card '+c+'">'
+      + badge
+      +'<div class="c-name">'+c.toUpperCase()+'</div>'
+      +'<div class="c-val">'+fmt(bal,c)+'</div>'
+      +'<div class="c-sub">капитал: '+fmt(cp,c)+'</div>'
+      +'<div class="c-sub '+pcls+'">профит: '+ps+fmt(pr,c)+'</div>'
+      +'</div>';
+  });
+  document.getElementById('ex-assets').innerHTML = h;
+}
+
+function renderExAgents() {
+  var ap = exState.agentProfit;
+
+  // Realized USDT from closed rounds v2 per agent
+  var realized = {};
+  var allIds = ['owner'].concat(agentCfg.agents.map(function(a){return a.id;}));
+  allIds.forEach(function(id){ realized[id] = 0; });
+
+  (exState.rounds2 || []).filter(function(r){ return r.status === 'closed'; }).forEach(function(r) {
+    if (!r.agentBreakdown) return;
+    allIds.forEach(function(id) {
+      realized[id] = (realized[id] || 0) + (r.agentBreakdown[id] || 0);
+    });
+  });
+
+  function agentRows(apBucket) {
+    if (!apBucket) return '<div class="c-sub">нет прибыли</div>';
+    var rows = '';
+    CURS.forEach(function(c) {
+      var v = apBucket[c];
+      if (!v || Math.abs(v) < 0.001) return;
+      var sign = v>=0?'+':'';
+      var col  = v>=0?CLR[c]:'var(--red)';
+      rows += '<div class="c-sub" style="color:'+col+'">'+sign+fmt(v,c)+'</div>';
+    });
+    return rows || '<div class="c-sub">нет прибыли</div>';
+  }
+
+  function realizedRow(usdt) {
+    if (Math.abs(usdt) < 0.001) return '';
+    var col = usdt >= 0 ? 'var(--usdt)' : 'var(--red)';
+    return '<div class="c-sub" style="color:var(--muted);margin-top:5px;border-top:1px solid var(--border);padding-top:5px">реализовано:</div>'
+      +'<div class="c-sub" style="color:'+col+';font-weight:700">'+(usdt>=0?'+':'')+usdt.toFixed(2)+' USDT</div>';
+  }
+
+  // Colors for agents (cycle through palette)
+  var AGENT_COLORS = ['var(--a1)','var(--a2)','var(--gold)','var(--orange)','var(--czk)','var(--usd)'];
+  var cardCount = 1 + agentCfg.agents.length; // owner + agents
+  var gridCols = Math.min(cardCount, 4);
+
+  var h = '';
+  // Owner card
+  h += '<div class="card owner">'
+    +'<div class="c-name">' + (agentCfg.ownerName||'Владелец') + '</div>'
+    +'<div class="c-sub" style="color:var(--muted);margin-bottom:5px">владелец · ' + ownerPct().toFixed(0) + '% от каждой сделки</div>'
+    + agentRows(ap['owner'])
+    + realizedRow(realized['owner']||0)
+    +'</div>';
+
+  agentCfg.agents.forEach(function(a, i) {
+    var col = AGENT_COLORS[i % AGENT_COLORS.length];
+    h += '<div class="card" style="border-top-color:'+col+';">'
+      +'<div class="c-name" style="color:'+col+'">'+a.name+'</div>'
+      +'<div class="c-sub" style="color:var(--muted);margin-bottom:5px">'+a.pct+'% от своих сделок</div>'
+      + agentRows(ap[a.id])
+      + realizedRow(realized[a.id]||0)
+      +'</div>';
+  });
+
+  var grid = document.getElementById('ex-agents');
+  grid.style.gridTemplateColumns = 'repeat('+gridCols+',1fr)';
+  grid.innerHTML = h;
+
+  // Update summary badge in settings
+  var badge = document.getElementById('agents-summary');
+  if (badge) badge.textContent = (1 + agentCfg.agents.length) + ' агент' + (agentCfg.agents.length === 0 ? '' : agentCfg.agents.length < 4 ? 'а' : 'ов');
+}
+
+function renderExCharts() {
+  // Profits by currency
+  var pr = exState.profits;
+  var maxP = Math.max.apply(null, CURS.map(function(c){return Math.abs(pr[c]);})) || 1;
+  var c1 = '<div class="chart-card"><div class="chart-title">Прибыль по валютам</div><div class="bar-chart">';
+  CURS.forEach(function(c) {
+    var v = pr[c], pct = Math.abs(v)/maxP*100;
+    var col = v>=0 ? CLR[c] : 'var(--red)';
+    c1 += '<div class="bar-row"><div class="bar-lbl">'+c.toUpperCase()+'</div>'
+      +'<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%;background:'+col+'"></div></div>'
+      +'<div class="bar-val" style="color:'+col+'">'+(v>=0?'+':'')+fmt(v,c)+'</div></div>';
+  });
+  c1 += '</div></div>';
+
+  // Agent profits chart — owner + all agents
+  var ap = exState.agentProfit;
+  var AGENT_COLORS2 = ['var(--green)','var(--a1)','var(--a2)','var(--gold)','var(--orange)','var(--czk)'];
+  var allAgentIds = ['owner'].concat(agentCfg.agents.map(function(a){return a.id;}));
+  var allAgentNames = [agentCfg.ownerName||'Владелец'].concat(agentCfg.agents.map(function(a){return a.name;}));
+
+  var c2 = '<div class="chart-card"><div class="chart-title">Агенты по валютам</div><div class="bar-chart">';
+  var hasAny = false;
+  CURS.forEach(function(c) {
+    var anyVal = allAgentIds.some(function(id){ return ap[id] && Math.abs(ap[id][c]||0) > 0.001; });
+    if (!anyVal) return;
+    hasAny = true;
+    var vals = allAgentIds.map(function(id){ return ap[id] ? (ap[id][c]||0) : 0; });
+    var mx = Math.max.apply(null, vals.map(Math.abs)) || 1;
+    c2 += '<div style="font-size:9px;color:var(--muted);margin:4px 0 3px">'+c.toUpperCase()+'</div>';
+    allAgentIds.forEach(function(id, i) {
+      var v = ap[id] ? (ap[id][c]||0) : 0;
+      if (Math.abs(v) < 0.001) return;
+      var col = AGENT_COLORS2[i % AGENT_COLORS2.length];
+      c2 += '<div class="bar-row"><div class="bar-lbl">'+allAgentNames[i]+'</div>'
+        +'<div class="bar-track"><div class="bar-fill" style="width:'+Math.abs(v)/mx*100+'%;background:'+col+'"></div></div>'
+        +'<div class="bar-val" style="color:'+col+';font-size:10px">'+(v>=0?'+':'')+fmt(v,c)+'</div></div>';
+    });
+  });
+  if (!hasAny) c2 += '<div style="color:var(--muted);font-size:11px">нет данных</div>';
+  c2 += '</div></div>';
+
+  // Deals by day
+  var dayMap = {};
+  exState.deals.forEach(function(d) {
+    if (!dayMap[d.date]) dayMap[d.date] = {count:0,byCur:{}};
+    dayMap[d.date].count++;
+    if (!dayMap[d.date].byCur[d.getCur]) dayMap[d.date].byCur[d.getCur] = 0;
+    dayMap[d.date].byCur[d.getCur] += d.profit;
+  });
+  var days = Object.keys(dayMap);
+  var maxC = Math.max.apply(null, days.map(function(d){return dayMap[d].count;})) || 1;
+  var c3 = '<div class="chart-card"><div class="chart-title">Сделки по дням</div><div class="bar-chart">';
+  if (days.length) {
+    days.forEach(function(d) {
+      var entry = dayMap[d];
+      var pStr = Object.keys(entry.byCur).map(function(c){
+        var v = entry.byCur[c];
+        return '<span style="color:'+CLR[c]+'">'+(v>=0?'+':'')+fmt(v,c)+'</span>';
+      }).join(' ');
+      c3 += '<div class="bar-row"><div class="bar-lbl">'+d+'</div>'
+        +'<div class="bar-track"><div class="bar-fill" style="width:'+entry.count/maxC*100+'%;background:var(--green)"></div></div>'
+        +'<div class="bar-val" style="font-size:9px">'+entry.count+' сд</div></div>';
+    });
+  } else {
+    c3 += '<div style="color:var(--muted);font-size:11px">нет данных</div>';
+  }
+  c3 += '</div></div>';
+
+  document.getElementById('ex-charts').innerHTML = c1+c2+c3;
+}
+
+function renderExLog() {
+  var list = document.getElementById('ex-log');
+  if (!exState.deals.length) { list.innerHTML='<div class="empty">Сделок пока нет</div>'; return; }
+  var h = '';
+  exState.deals.slice().reverse().forEach(function(d,i) {
+    var num = exState.deals.length-i;
+    var col = d.profit>=0?'var(--green)':'var(--red)';
+    var sign = d.profit>=0?'+':'';
+    var agentObj = getAgent(d.agent || 'owner');
+    var agentLabel = agentObj ? agentObj.name : (d.agent || 'owner');
+    var AGENT_COLORS3 = ['var(--green)','var(--a1)','var(--a2)','var(--gold)','var(--orange)','var(--czk)'];
+    var agentColorIdx = d.agent === 'owner' ? 0 : agentCfg.agents.findIndex(function(a){return a.id===d.agent;});
+    var agentColor = AGENT_COLORS3[Math.max(0,agentColorIdx) % AGENT_COLORS3.length];
+    var abadge = '<span class="ab" style="background:rgba(255,255,255,.06);color:'+agentColor+'">'+agentLabel+'</span>';
+    // is this deal inside the currently open round?
+    var roundOpen = exState.openRound2 && d.id >= exState.openRound2;
+    var statusDot = roundOpen
+      ? '<span style="color:var(--orange);font-size:10px;margin-left:6px">● в раунде</span>'
+      : '<span style="color:var(--green);font-size:10px;margin-left:6px">● вне раунда</span>';
+
+    h += '<div class="li">'
+      +'<div class="li-n">#'+num+'</div>'
+      +'<div><div class="li-m">'
+      +'<span class="tag t-'+d.giveCur+'">'+fmt(d.giveAmount,d.giveCur)+'</span>'
+      +' → <span class="tag t-'+d.getCur+'">'+fmt(d.getAmount,d.getCur)+'</span>'
+      +abadge+statusDot
+      +(d.client?' <span style="font-size:10px;color:var(--muted)">'+d.client+'</span>':'')
+      +'</div>'
+      +'<div class="li-s">'+d.date+' '+d.time+' · курс: 1 '+SYM[d.giveCur]+' = '+d.rate+' '+SYM[d.getCur]+(d.note?' · '+d.note:'')+'</div>'
+      +'</div>'
+      +'<div class="li-p"><div class="li-pv" style="color:'+col+'">'+sign+fmt(d.profit,d.getCur)+'</div>'
+      +'<div class="li-pp">'+sign+d.pct+'%</div></div>'
+      +'<button class="db ex-del" data-id="'+d.id+'">✕</button>'
+      +'</div>';
+  });
+  list.innerHTML = h;
+}
+
+function renderExchange() {
+  try { renderExAssets(); } catch(e){ console.error('renderExAssets:', e); }
+  try { renderExAgents(); } catch(e){ console.error('renderExAgents:', e); }
+  try { renderExCharts(); } catch(e){ console.error('renderExCharts:', e); }
+  try { renderExLog();    } catch(e){ console.error('renderExLog:', e); }
+  try { if(document.getElementById("cf-log")) renderCfLog(); } catch(e){ console.error('renderCfLog:', e); }
+}
+
+// ================================================================
+// ROUNDS v2 — RENDER
+// ================================================================
+function renderRounds() {
+  var closedRounds2 = exState.rounds2.filter(function(r){ return r.status === 'closed'; });
+  var totalUsdt = closedRounds2.reduce(function(s,r){ return s + (r.profitUsdt||0); }, 0);
+  var sign0 = totalUsdt >= 0 ? '+' : '';
+  var col0  = totalUsdt >= 0 ? 'var(--green)' : 'var(--red)';
+  var openR = exState.openRound2 ? exState.rounds2.find(function(r){ return r.id === exState.openRound2; }) : null;
+
+  // Summary cards
+  var sh = '<div class="card usdt">'
+    +'<div class="c-name">Реализовано всего</div>'
+    +'<div class="c-val" style="color:'+col0+'">'+sign0+totalUsdt.toFixed(2)+' USDT</div>'
+    +'<div class="c-sub">'+closedRounds2.length+' закрытых раундов</div>'
+    +'</div>'
+    +'<div class="card '+(openR?'pa':'eur')+'">'
+    +'<div class="c-name">Текущий раунд</div>'
+    +'<div class="c-val" style="color:'+(openR?'var(--gold)':'var(--muted)')+'">'+( openR ? openR.name : '—' )+'</div>'
+    +'<div class="c-sub">'+(openR ? 'открыт '+openR.openedDate+' '+openR.openedTime : 'нет активного раунда')+'</div>'
+    +'</div>';
+  document.getElementById('rounds-summary').innerHTML = sh;
+
+  // Open round panel
+  var openHtml = '';
+  if (openR) {
+    // Show current balance snapshot delta
+    var snapUsdt = openR.snapshotUsdt || 0;
+    var rates    = openR.rates || {};
+    var curUsdt  = portfolioToUsdt(exState.balances, rates);
+    var delta    = curUsdt - snapUsdt;
+    var dSign    = delta >= 0 ? '+' : '';
+    var dCol     = delta >= 0 ? 'var(--green)' : 'var(--red)';
+
+    // Deals since round opened
+    var dealsSince = exState.deals.filter(function(d){ return d.id >= openR.id; });
+
+    openHtml = '<div class="round-item" style="border-color:var(--gold)">'
+      +'<div class="round-hdr">'
+      +'<div class="round-title" style="color:var(--gold)">▶ '+openR.name+'</div>'
+      +'<div class="round-meta">открыт '+openR.openedDate+' '+openR.openedTime+' · '+dealsSince.length+' сделок</div>'
+      +'</div>'
+      +'<div class="round-profits" style="margin-bottom:14px">'
+      +'<div class="rp-item"><span class="rp-cur">портфель при открытии:</span>'
+      +'<span style="color:var(--muted);font-weight:700">'+snapUsdt.toFixed(2)+' USDT</span></div>'
+      +'<div class="rp-item"><span class="rp-cur">портфель сейчас:</span>'
+      +'<span style="color:var(--text);font-weight:700">'+curUsdt.toFixed(2)+' USDT</span></div>'
+      +'<div class="rp-item"><span class="rp-cur">нереализованная Δ:</span>'
+      +'<span style="color:'+dCol+';font-weight:700;font-size:14px">'+dSign+delta.toFixed(2)+' USDT</span></div>'
+      +'</div>'
+      // Balances at open
+      +'<div style="font-size:9px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">Снимок баланса при открытии</div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
+      + CURS.map(function(c){
+          var v = openR.snapshot[c] || 0;
+          if (Math.abs(v) < 0.001) return '';
+          return '<div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;font-size:11px;">'
+            +'<span style="color:var(--muted);font-size:9px;">'+c.toUpperCase()+'</span><br>'
+            +'<span style="color:'+CLR[c]+';font-weight:700">'+fmt(v,c)+'</span>'
+            +'</div>';
+        }).join('')
+      +'</div>'
+      +'<button class="btn btn-r" id="btn-close-round" style="width:100%;">⏹ Закрыть раунд и зафиксировать прибыль</button>'
+      +'</div>';
+  } else {
+    openHtml = '<div class="empty" style="margin-bottom:12px">Нет активного раунда</div>'
+      +'<div style="display:flex;gap:10px;">'
+      +'<input type="text" id="round-name-input" placeholder="Название раунда (необязательно)" '
+      +'style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);'
+      +'font-family:\'JetBrains Mono\',monospace;font-size:12px;padding:9px 11px;outline:none;">'
+      +'<button class="btn btn-g" id="btn-open-round" style="white-space:nowrap;">▶ Открыть раунд</button>'
+      +'</div>';
+  }
+  document.getElementById('open-rounds').innerHTML = openHtml;
+
+  // Wire buttons
+  if (openR) {
+    document.getElementById('btn-close-round').addEventListener('click', closeRound2);
+  } else {
+    document.getElementById('btn-open-round').addEventListener('click', openRound2);
+    var ni = document.getElementById('round-name-input');
+    if (ni) ni.addEventListener('keydown', function(e){ if(e.key==='Enter') openRound2(); });
+  }
+
+  // Closed rounds
+  var closedHtml = '';
+  closedRounds2.slice().reverse().forEach(function(r, i) {
+    var num   = closedRounds2.length - i;
+    var usdt  = r.profitUsdt || 0;
+    var sign  = usdt >= 0 ? '+' : '';
+    var col   = usdt >= 0 ? 'var(--green)' : 'var(--red)';
+    var pct   = r.snapshotUsdt > 0 ? ((usdt/r.snapshotUsdt)*100).toFixed(1) : '0.0';
+
+    // Agent breakdown
+    var agentLines = '';
+    if (r.agentBreakdown) {
+      var allIds = ['owner'].concat(agentCfg.agents.map(function(a){return a.id;}));
+      allIds.forEach(function(id) {
+        var v = r.agentBreakdown[id];
+        if (!v || Math.abs(v) < 0.001) return;
+        var ag = getAgent(id);
+        var agName = ag ? ag.name : id;
+        var vs = v>=0?'+':'';
+        var vc = v>=0?'var(--green)':'var(--red)';
+        agentLines += '<div class="rp-item"><span class="rp-cur">'+agName+':</span>'
+          +'<span style="color:'+vc+';font-weight:600">'+vs+v.toFixed(2)+' USDT</span></div>';
+      });
+    }
+
+    closedHtml += '<div class="round-item">'
+      +'<div class="round-hdr">'
+      +'<div class="round-title" style="color:var(--green)">[✓] #'+num+' '+r.name+'</div>'
+      +'<div class="round-meta">'+r.openedDate+' '+r.openedTime+' → '+r.closedDate+' '+r.closedTime+'</div>'
+      +'</div>'
+      +'<div class="round-profits">'
+      +'<div class="rp-item"><span class="rp-cur">прибыль:</span>'
+      +'<span style="color:'+col+';font-weight:700;font-size:14px">'+sign+usdt.toFixed(2)+' USDT</span>'
+      +'<span style="color:var(--muted);font-size:10px;margin-left:6px">('+sign+pct+'%)</span></div>'
+      +'<div class="rp-item"><span class="rp-cur">портфель открытие→закрытие:</span>'
+      +'<span style="color:var(--muted)">'+r.snapshotUsdt.toFixed(2)+' → '+r.closedUsdt.toFixed(2)+' USDT</span></div>'
+      + agentLines
+      +'</div></div>';
+  });
+  document.getElementById('closed-rounds').innerHTML = closedHtml || '<div class="empty">Закрытых раундов пока нет</div>';
+}
+
+// ================================================================
+// ROUNDS v2 — ACTIONS
+// ================================================================
+function openRound2() {
+  if (exState.openRound2) { alert('Сначала закрой текущий раунд.'); return; }
+  var nameEl = document.getElementById('round-name-input');
+  var name = nameEl ? nameEl.value.trim() : '';
+  if (!name) name = 'Раунд ' + (exState.rounds2.length + 1);
+
+  var btn = document.getElementById('btn-open-round');
+  if (btn) { btn.textContent = '⟳ Загрузка курсов...'; btn.disabled = true; }
+
+  fetchAllRatesUsdt().then(function(rates) {
+    var snapshot = {};
+    CURS.forEach(function(c){ snapshot[c] = exState.balances[c] || 0; });
+    var snapUsdt = portfolioToUsdt(snapshot, rates);
+
+    var round = {
+      id: Date.now(),
+      name: name,
+      openedDate: today(),
+      openedTime: now(),
+      snapshot: snapshot,
+      snapshotUsdt: snapUsdt,
+      rates: rates,
+      status: 'open'
+    };
+    exState.rounds2.push(round);
+    exState.openRound2 = round.id;
+    save();
+    renderRounds();
+  }).catch(function(e) {
+    // Fallback: open with zero rates if API fails
+    var snapshot = {};
+    CURS.forEach(function(c){ snapshot[c] = exState.balances[c] || 0; });
+    var rates = {eur:1.08, huf:0.0026, usd:1, czk:0.043};
+    var snapUsdt = portfolioToUsdt(snapshot, rates);
+    var round = {
+      id: Date.now(),
+      name: name,
+      openedDate: today(),
+      openedTime: now(),
+      snapshot: snapshot,
+      snapshotUsdt: snapUsdt,
+      rates: rates,
+      status: 'open',
+      ratesWarning: true
+    };
+    exState.rounds2.push(round);
+    exState.openRound2 = round.id;
+    save();
+    renderRounds();
+    alert('Не удалось загрузить курсы ('+e.message+'). Использованы приблизительные значения. Уточни вручную.');
+  });
+}
+
+function closeRound2() {
+  if (!exState.openRound2) return;
+  var round = exState.rounds2.find(function(r){ return r.id === exState.openRound2; });
+  if (!round) return;
+
+  if (!confirm('Закрыть раунд "'+round.name+'" и зафиксировать прибыль?')) return;
+
+  var btn = document.getElementById('btn-close-round');
+  if (btn) { btn.textContent = '⟳ Загрузка курсов...'; btn.disabled = true; }
+
+  fetchAllRatesUsdt().then(function(closeRates) {
+    finalizeRound(round, closeRates);
+  }).catch(function() {
+    // Use opening rates as fallback
+    finalizeRound(round, round.rates);
+    alert('Не удалось загрузить актуальные курсы. Использованы курсы открытия раунда.');
+  });
+}
+
+function finalizeRound(round, closeRates) {
+  var closedSnapshot = {};
+  CURS.forEach(function(c){ closedSnapshot[c] = exState.balances[c] || 0; });
+  var closedUsdt = portfolioToUsdt(closedSnapshot, closeRates);
+  var profitUsdt = closedUsdt - round.snapshotUsdt;
+
+  // Agent breakdown: distribute profit proportionally to deals since round opened
+  var dealsSince = exState.deals.filter(function(d){ return d.id >= round.id; });
+  var agentBreakdown = {};
+  var allIds = ['owner'].concat(agentCfg.agents.map(function(a){return a.id;}));
+  allIds.forEach(function(id){ agentBreakdown[id] = 0; });
+
+  if (dealsSince.length > 0) {
+    var totalAbsProfit = dealsSince.reduce(function(s,d){ return s + Math.abs(d.profit); }, 0) || 1;
+    dealsSince.forEach(function(d) {
+      var weight = Math.abs(d.profit) / totalAbsProfit;
+      var agentId = d.agent || 'owner';
+      var agentObj = getAgent(agentId);
+      var agentFrac = agentObj && agentId !== 'owner' ? (agentObj.pct / 100) : 0;
+      if (!agentBreakdown[agentId]) agentBreakdown[agentId] = 0;
+      agentBreakdown[agentId] += profitUsdt * weight * agentFrac;
+      agentBreakdown['owner'] += profitUsdt * weight * (1 - agentFrac);
+    });
+  } else {
+    // No deals — all profit to owner
+    agentBreakdown['owner'] = profitUsdt;
+  }
+
+  round.status        = 'closed';
+  round.closedDate    = today();
+  round.closedTime    = now();
+  round.closedUsdt    = closedUsdt;
+  round.closeRates    = closeRates;
+  round.profitUsdt    = profitUsdt;
+  round.agentBreakdown = agentBreakdown;
+
+  exState.openRound2 = null;
+  save();
+  renderRounds();
+  // Also refresh agent cards (realized USDT updated)
+  renderExAgents();
+}
+
+// ================================================================
+// EXCHANGE — ACTIONS
+// ================================================================
+function updateRateLabel() {
+  var g = document.getElementById('ex-give-cur').value;
+  var r = document.getElementById('ex-get-cur').value;
+  document.getElementById('ex-rate-lbl').textContent = 'Курс (1 '+SYM[g]+' = ? '+SYM[r]+')';
+}
+
+// ================================================================
+// AUTO RATE FETCH
+// ================================================================
+// Frankfurter covers: EUR, USD, HUF, CZK (fiat only)
+// CoinGecko covers: USDT vs fiat
+// "auto" = pick the right API based on the pair
+
+var FIAT_CURS = ['eur','usd','huf','czk'];
+var CGIDS = {usdt:'tether',eur:'euro',usd:'usd',huf:'hungarian-forint',czk:'czech-koruna'};
+var CGVS  = {eur:'eur',usd:'usd',huf:'huf',czk:'czk',usdt:'usd'};
+
+function fetchRate() {
+  var gc = document.getElementById('ex-give-cur').value;
+  var rc = document.getElementById('ex-get-cur').value;
+  var src = document.getElementById('ex-rate-api').value;
+  var btn = document.getElementById('btn-fetch-rate');
+  var lbl = document.getElementById('ex-rate-source');
+
+  if (gc === rc) { lbl.textContent = 'Выбери разные валюты'; return; }
+
+  btn.textContent = '...';
+  btn.disabled = true;
+  lbl.style.color = 'var(--muted)';
+  lbl.textContent = 'Загрузка...';
+
+  // Strategy:
+  // - USDT treated as USD (≈1:1) for Frankfurter
+  // - If both fiat: Frankfurter directly
+  // - If one side is USDT: substitute with USD in Frankfurter, result is the same rate
+  // - CoinGecko used only when explicitly selected
+
+  if (src === 'coingecko') {
+    fetchCoinGecko(gc, rc);
+    return;
+  }
+
+  // For "auto" or "frankfurter": always use Frankfurter, substitute USDT→USD
+  var fGc = gc === 'usdt' ? 'usd' : gc;
+  var fRc = rc === 'usdt' ? 'usd' : rc;
+
+  if (fGc === fRc) {
+    // e.g. USD→USDT: rate is always 1
+    setRate(1, 'USDT≈USD');
+    return;
+  }
+
+  fetchFrankfurter(fGc, fRc, gc === 'usdt' || rc === 'usdt' ? 'Frankfurter (USDT≈USD)' : 'Frankfurter');
+}
+
+function setRate(rate, source) {
+  var btn = document.getElementById('btn-fetch-rate');
+  var lbl = document.getElementById('ex-rate-source');
+  var gc  = document.getElementById('ex-give-cur').value;
+  var rc  = document.getElementById('ex-get-cur').value;
+  document.getElementById('ex-rate').value = rate;
+  // Always show real currency names, not the substituted ones
+  document.getElementById('ex-rate-lbl').textContent = 'Курс (1 '+SYM[gc]+' = ? '+SYM[rc]+')';
+  lbl.textContent = '✓ ' + source + ' · ' + new Date().toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'});
+  lbl.style.color = 'var(--green)';
+  btn.textContent = '⟳ Курс';
+  btn.disabled = false;
+  calcHint();
+}
+
+function rateError(msg) {
+  var btn = document.getElementById('btn-fetch-rate');
+  var lbl = document.getElementById('ex-rate-source');
+  lbl.textContent = '✗ ' + msg;
+  lbl.style.color = 'var(--red)';
+  btn.textContent = '⟳ Курс';
+  btn.disabled = false;
+}
+
+function fetchFrankfurter(gc, rc, label) {
+  var base = gc.toUpperCase();
+  var target = rc.toUpperCase();
+  var srcLabel = label || 'Frankfurter';
+  fetch('https://api.frankfurter.app/latest?from='+base+'&to='+target)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d.rates && d.rates[target]) {
+        setRate(parseFloat(d.rates[target].toFixed(6)), srcLabel);
+      } else {
+        rateError('Frankfurter: нет данных для пары');
+      }
+    })
+    .catch(function(){ rateError('Ошибка сети'); });
+}
+
+function fetchCoinGecko(gc, rc) {
+  // CoinGecko: get price of giveCur in getCur
+  // Works best when one of them is USDT/USD
+  var coinId = null;
+  var vsCur  = null;
+
+  if (gc === 'usdt') {
+    // price of USDT in rc
+    coinId = 'tether';
+    vsCur  = rc === 'usdt' ? 'usd' : rc;
+  } else if (rc === 'usdt') {
+    // price of gc in USD (USDT ≈ USD)
+    coinId = gc === 'eur' ? 'euro' : gc === 'huf' ? 'hungarian-forint' : gc === 'czk' ? 'czech-koruna' : null;
+    if (!coinId) { rateError('Пара не поддерживается CoinGecko'); return; }
+    vsCur = 'usd';
+  } else {
+    // neither is USDT — use frankfurter instead
+    fetchFrankfurter(gc, rc); return;
+  }
+
+  fetch('https://api.coingecko.com/api/v3/simple/price?ids='+coinId+'&vs_currencies='+vsCur)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if (d[coinId] && d[coinId][vsCur]) {
+        var raw = d[coinId][vsCur];
+        // If we fetched price of gc in USD and rc is USDT, rate = 1/raw (1 gc = raw USD ≈ raw USDT)
+        // Actually: if gc='eur', coinId='euro', vs='usd' → d.euro.usd = price of 1 EUR in USD
+        // We want 1 EUR = ? USDT → same as USD ≈ USDT so rate = raw
+        // If gc='usdt', coinId='tether', vs=rc → rate = raw directly
+        setRate(parseFloat(raw.toFixed(6)), 'CoinGecko');
+      } else {
+        rateError('Нет данных CoinGecko');
+      }
+    })
+    .catch(function(){ rateError('Ошибка CoinGecko'); });
+}
+
+document.getElementById('btn-fetch-rate').addEventListener('click', fetchRate);
+// Auto-fetch when currency pair changes
+document.getElementById('ex-give-cur').addEventListener('change', function(){ updateRateLabel(); fetchRate(); });
+document.getElementById('ex-get-cur').addEventListener('change',  function(){ updateRateLabel(); fetchRate(); });
+// Recalc hint when amounts change
+document.getElementById('ex-give-amt').addEventListener('input', calcHint);
+document.getElementById('ex-get-amt').addEventListener('input',  calcHint);
+// Spread calculator
+// When rate + spread entered → auto-fill getAmt
+// When rate + getAmt entered → show resulting spread %
+var _calcBusy = false;
+function calcHint(editedField) {
+  if (_calcBusy) return;
+  _calcBusy = true;
+  try {
+    var ga      = parseFloat(document.getElementById('ex-give-amt').value);
+    var ra      = parseFloat(document.getElementById('ex-get-amt').value);
+    var rt      = parseFloat(document.getElementById('ex-rate').value);
+    var sp      = parseFloat(document.getElementById('ex-spread').value);
+    var getCur  = document.getElementById('ex-get-cur').value;
+    var giveCur = document.getElementById('ex-give-cur').value;
+    var hint    = document.getElementById('ex-calc-hint');
+
+    if (!rt) { hint.textContent = ''; return; }
+
+    if (!sp) {
+      if (ga && ra) {
+        var mv = ga * rt;
+        var actualSpread = mv > 0 ? ((ra - mv) / mv * 100) : 0;
+        var col  = actualSpread >= 0 ? 'var(--green)' : 'var(--red)';
+        var sign = actualSpread >= 0 ? '+' : '';
+        hint.innerHTML = '<span style="color:'+col+'">Спред: ' + sign + actualSpread.toFixed(2) + '%  &nbsp;|&nbsp;  прибыль: ' + sign + (ra - mv).toFixed(2) + ' ' + SYM[getCur] + '</span>';
+      } else {
+        hint.textContent = '';
+      }
+      return;
+    }
+
+    var clientRate = rt * (1 + sp/100);
+
+    // Direction determined by which field triggered the event
+    if (editedField === 'give' && ga) {
+      var getAmt = parseFloat((ga * clientRate).toFixed(2));
+      document.getElementById('ex-get-amt').value = getAmt;
+      hint.innerHTML = '<span style="color:var(--green)">Клиент платит: ' + getAmt.toFixed(2) + ' ' + SYM[getCur] + ' &nbsp;(курс ' + clientRate.toFixed(4) + ')</span>';
+    } else if (editedField === 'get' && ra) {
+      var giveAmt = parseFloat((ra / clientRate).toFixed(2));
+      document.getElementById('ex-give-amt').value = giveAmt;
+      hint.innerHTML = '<span style="color:var(--green)">Мы даём: ' + giveAmt.toFixed(2) + ' ' + SYM[giveCur] + ' &nbsp;(курс ' + clientRate.toFixed(4) + ')</span>';
+    } else if (editedField === 'rate' || editedField === 'spread') {
+      // Rate or spread changed — recalc based on whichever amount is filled
+      if (ga) {
+        var getAmt2 = parseFloat((ga * clientRate).toFixed(2));
+        document.getElementById('ex-get-amt').value = getAmt2;
+        hint.innerHTML = '<span style="color:var(--green)">Клиент платит: ' + getAmt2.toFixed(2) + ' ' + SYM[getCur] + ' &nbsp;(курс ' + clientRate.toFixed(4) + ')</span>';
+      } else if (ra) {
+        var giveAmt2 = parseFloat((ra / clientRate).toFixed(2));
+        document.getElementById('ex-give-amt').value = giveAmt2;
+        hint.innerHTML = '<span style="color:var(--green)">Мы даём: ' + giveAmt2.toFixed(2) + ' ' + SYM[giveCur] + ' &nbsp;(курс ' + clientRate.toFixed(4) + ')</span>';
+      } else {
+        hint.textContent = '';
+      }
+    } else {
+      hint.textContent = '';
+    }
+  } finally {
+    _calcBusy = false;
+  }
+}
+
+document.getElementById('ex-give-amt').addEventListener('input', function(){ calcHint('give'); });
+document.getElementById('ex-get-amt').addEventListener('input',  function(){ calcHint('get'); });
+document.getElementById('ex-rate').addEventListener('input',     function(){ calcHint('rate'); });
+document.getElementById('ex-spread').addEventListener('input',   function(){ calcHint('spread'); });
+updateRateLabel();
+
+CURS.forEach(function(c) {
+  document.getElementById('cap-'+c).addEventListener('input', syncCapital);
+});
+document.getElementById('btn-agent-cfg').addEventListener('click', function(){ openAgentModal(); });
+
+function addExDeal() {
+  try {
+  var ga     = parseFloat(document.getElementById('ex-give-amt').value);
+  var gc     = document.getElementById('ex-give-cur').value;
+  var ra     = parseFloat(document.getElementById('ex-get-amt').value);
+  var rc     = document.getElementById('ex-get-cur').value;
+  var rt     = parseFloat(document.getElementById('ex-rate').value);
+  var agent  = document.getElementById('ex-agent').value;
+  var client = document.getElementById('ex-client').value.trim();
+  var note   = document.getElementById('ex-note').value.trim();
+
+  if (!ga||!ra||!rt) { alert('Заполни три числовых поля.'); return; }
+  if (gc===rc)       { alert('Валюты должны быть разными.'); return; }
+
+  // rate = 1 giveCur = rt getCur  (e.g. 1 EUR = 1.136 USDT)
+  // market value of what we gave, expressed in getCur = ga * rt
+  // profit = what client gave us minus market value
+  var mv     = ga * rt;
+  var profit = ra - mv;
+  var pct    = mv > 0 ? ((profit/mv)*100).toFixed(1) : '0.0';
+
+  var deal = {
+    id:Date.now(), giveCur:gc, giveAmount:ga, getCur:rc, getAmount:ra,
+    rate:rt, profit:profit, pct:pct, agent:agent, client:client, note:note,
+    date:today(), time:now()
+  };
+  exState.deals.push(deal);
+
+  // rebuildRounds recalculates everything: balances, profits, agentProfit, rounds
+  rebuildRounds();
+
+  document.getElementById('ex-give-amt').value='';
+  document.getElementById('ex-get-amt').value='';
+  document.getElementById('ex-client').value='';
+  document.getElementById('ex-note').value='';
+  document.getElementById('ex-calc-hint').textContent='';
+
+  save(); renderExchange();
+  } catch(e) {
+    console.error('addExDeal error:', e);
+    alert('Ошибка при добавлении сделки: ' + e.message);
+  }
+}
+
+function undoExDeal() {
+  if (!exState.deals.length) { alert('Нет сделок для отмены'); return; }
+  // remove last deal, rebuildRounds recalculates everything
+  exState.deals.pop();
+  rebuildRounds();
+  save(); renderExchange();
+}
+
+function deleteExDeal(id) {
+  var idx = exState.deals.findIndex(function(d){return d.id===id;});
+  if (idx===-1) return;
+  exState.deals.splice(idx,1);
+  rebuildRounds();
+  save(); renderExchange();
+}
+
+// Rebuild rounds by replaying all deals
+// Logic: round opens when balance of any currency goes from 0 to positive (we acquired it)
+// Round closes when that balance returns to 0 (we sold it all back)
+// Base currency = giveCur of the first deal that opened the round
+// Profit = total getCur received minus total giveCur spent, converted to USDT
+function rebuildRounds() {
+  var tempBal = {eur:0,huf:0,usdt:0,usd:0,czk:0};
+
+  exState.deals.forEach(function(d) {
+    tempBal[d.giveCur] -= d.giveAmount;
+    tempBal[d.getCur]  += d.getAmount;
+  });
+
+  // Rebuild profits from deals (for asset cards)
+  exState.profits     = {eur:0,huf:0,usdt:0,usd:0,czk:0};
+  exState.agentProfit = {};
+  var allIds = ['owner'].concat(agentCfg.agents.map(function(a){return a.id;}));
+  allIds.forEach(function(id) {
+    exState.agentProfit[id] = {eur:0,huf:0,usdt:0,usd:0,czk:0};
+  });
+
+  exState.deals.forEach(function(d) {
+    exState.profits[d.getCur] += d.profit;
+    var agentId = d.agent || 'owner';
+    var agentObj = getAgent(agentId);
+    var agentFrac = agentObj && agentId !== 'owner' ? (agentObj.pct / 100) : 0;
+    if (!exState.agentProfit[agentId]) exState.agentProfit[agentId] = {eur:0,huf:0,usdt:0,usd:0,czk:0};
+    if (!exState.agentProfit['owner']) exState.agentProfit['owner'] = {eur:0,huf:0,usdt:0,usd:0,czk:0};
+    exState.agentProfit[agentId][d.getCur] += d.profit * agentFrac;
+    exState.agentProfit['owner'][d.getCur] += d.profit * (1 - agentFrac);
+  });
+
+  // Apply cashflows to capital
+  var cfCap = {eur:0,huf:0,usdt:0,usd:0,czk:0};
+  (exState.cashflows||[]).forEach(function(cf) {
+    if (cf.type === 'in')  cfCap[cf.cur] += cf.amt;
+    if (cf.type === 'out') cfCap[cf.cur] -= cf.amt;
+  });
+
+  CURS.forEach(function(c) {
+    exState.balances[c] = cap(c) + cfCap[c] + tempBal[c];
+  });
+}
+
+function exportExCsv() {
+  if (!exState.deals.length) { alert('Нет сделок'); return; }
+  var rows=[['#','Дата','Время','Агент','Отдал','Вал','Получил','Вал','Курс','Прибыль','%','Клиент','Заметка']];
+  exState.deals.forEach(function(d,i){
+    rows.push([i+1,d.date,d.time,d.agent.toUpperCase(),d.giveAmount,d.giveCur.toUpperCase(),
+      d.getAmount,d.getCur.toUpperCase(),d.rate,d.profit.toFixed(2),d.pct,d.client,d.note]);
+  });
+  var csv=rows.map(function(r){return r.map(function(v){return'"'+(v||'')+'"';}).join(',');}).join('\n');
+  var a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='exchange.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+function resetEx() {
+  if (!confirm('Сбросить все данные обменника?')) return;
+  if (!confirm('Точно? Это действие необратимо.')) return;
+  exState = freshExState();
+  save(); renderExchange();
+}
+
+// ================================================================
+// CASHFLOW — ACTIONS
+// ================================================================
+function renderCfLog() {
+  var log = document.getElementById('cf-log');
+  var cfs = exState.cashflows || [];
+  if (!cfs.length) { log.innerHTML = ''; return; }
+  var h = '';
+  cfs.slice().reverse().forEach(function(cf, i) {
+    var col = cf.type === 'in' ? 'var(--green)' : 'var(--red)';
+    var sign = cf.type === 'in' ? '+' : '-';
+    var label = cf.type === 'in' ? 'Пополнение' : 'Вывод';
+    h += '<div class="li">'
+      + '<div class="li-n">' + (cfs.length - i) + '</div>'
+      + '<div><div class="li-m">' + label + ' <span class="tag t-' + cf.cur + '">' + fmt(cf.amt, cf.cur) + '</span></div>'
+      + '<div class="li-s">' + cf.date + (cf.note ? ' · ' + cf.note : '') + '</div></div>'
+      + '<div class="li-p"><div class="li-pv" style="color:' + col + '">' + sign + fmt(cf.amt, cf.cur) + '</div></div>'
+      + '<button class="db" data-cf-del="' + (cfs.length - 1 - i) + '">✕</button>'
+      + '</div>';
+  });
+  log.innerHTML = h;
+}
+
+document.getElementById('btn-cf-add').addEventListener('click', function() {
+  var type = document.getElementById('cf-type').value;
+  var cur  = document.getElementById('cf-cur').value;
+  var amt  = parseFloat(document.getElementById('cf-amt').value);
+  var note = document.getElementById('cf-note').value.trim();
+  if (!amt) { alert('Введи сумму'); return; }
+  if (!exState.cashflows) exState.cashflows = [];
+  exState.cashflows.push({type:type, cur:cur, amt:amt, note:note, date:today()});
+  document.getElementById('cf-amt').value = '';
+  document.getElementById('cf-note').value = '';
+  // Update capital input to reflect new base
+  rebuildRounds();
+  save(); renderExchange(); renderCfLog();
+});
+
+document.getElementById('cf-log').addEventListener('click', function(e) {
+  var t = e.target;
+  while (t && t !== this) {
+    var idx = t.getAttribute('data-cf-del');
+    if (idx !== null) {
+      exState.cashflows.splice(parseInt(idx), 1);
+      rebuildRounds(); save(); renderExchange(); renderCfLog(); return;
+    }
+    t = t.parentNode;
+  }
+});
+
+document.getElementById('btn-ex-deal').addEventListener('click', addExDeal);
+document.getElementById('btn-ex-undo').addEventListener('click', undoExDeal);
+document.getElementById("btn-ex-csv").addEventListener("click",  exportExCsv);
+document.getElementById("btn-ex-reset").addEventListener("click", resetEx);
+
+// ================================================================
+// REPORT — daily summary for Telegram
+// ================================================================
+document.getElementById("btn-ex-report").addEventListener("click", function() {
+  var todayStr = today();
+  var todayDeals = exState.deals.filter(function(d){ return d.date === todayStr; });
+  if (!todayDeals.length) { alert("Сегодня сделок нет"); return; }
+
+  // — Profits today by currency
+  var todayProfits = {};
+  todayDeals.forEach(function(d) {
+    if (!todayProfits[d.getCur]) todayProfits[d.getCur] = 0;
+    todayProfits[d.getCur] += d.profit;
+  });
+
+  // — Closed rounds today (rounds2)
+  var todayRounds = (exState.rounds2 || []).filter(function(r){
+    return r.status === 'closed' && r.closedDate === todayStr;
+  });
+
+  // — Open round (if any)
+  var openR2 = exState.openRound2
+    ? (exState.rounds2 || []).find(function(r){ return r.id === exState.openRound2; })
+    : null;
+
+  // — Agent breakdown for today's deals (profit per agent, in native currency)
+  var allAgentIds = ['owner'].concat(agentCfg.agents.map(function(a){ return a.id; }));
+  var agentDayProfit = {};
+  allAgentIds.forEach(function(id){ agentDayProfit[id] = {}; });
+
+  todayDeals.forEach(function(d) {
+    var agentId = d.agent || 'owner';
+    var agentObj = getAgent(agentId);
+    var agentFrac = agentObj && agentId !== 'owner' ? (agentObj.pct / 100) : 0;
+    var ownerFrac = 1 - agentFrac;
+    if (!agentDayProfit[agentId]) agentDayProfit[agentId] = {};
+    if (!agentDayProfit['owner'])  agentDayProfit['owner']  = {};
+    agentDayProfit[agentId][d.getCur] = (agentDayProfit[agentId][d.getCur] || 0) + d.profit * agentFrac;
+    agentDayProfit['owner'][d.getCur] = (agentDayProfit['owner'][d.getCur]  || 0) + d.profit * ownerFrac;
+  });
+
+  // Realized USDT from today's closed rounds2 per agent
+  var agentRealized = {};
+  allAgentIds.forEach(function(id){ agentRealized[id] = 0; });
+  todayRounds.forEach(function(r) {
+    if (!r.agentBreakdown) return;
+    allAgentIds.forEach(function(id) {
+      agentRealized[id] = (agentRealized[id] || 0) + (r.agentBreakdown[id] || 0);
+    });
+  });
+
+  // — Build report lines
+  var lines = [];
+  lines.push("📊 Отчёт за " + todayStr);
+  lines.push("Сделок сегодня: " + todayDeals.length);
+
+  // Profit by currency
+  lines.push("");
+  lines.push("💰 Профит по сделкам:");
+  var hasProfits = false;
+  CURS.forEach(function(c) {
+    var v = todayProfits[c];
+    if (!v || Math.abs(v) < 0.001) return;
+    hasProfits = true;
+    lines.push("  " + c.toUpperCase() + ": " + (v>=0?"+":"") + fmt(v,c));
+  });
+  if (!hasProfits) lines.push("  —");
+
+  // Closed rounds today
+  if (todayRounds.length) {
+    lines.push("");
+    lines.push("✅ Закрытые раунды:");
+    todayRounds.forEach(function(r) {
+      var u = r.profitUsdt || 0;
+      lines.push("  " + r.name + ": " + (u>=0?"+":"") + u.toFixed(2) + " USDT"
+        + " (" + r.snapshotUsdt.toFixed(0) + " → " + r.closedUsdt.toFixed(0) + ")");
+    });
+  }
+
+  // Open round
+  if (openR2) {
+    lines.push("");
+    lines.push("🔄 Открытый раунд: " + openR2.name);
+    lines.push("  открыт " + openR2.openedDate + " " + openR2.openedTime);
+    lines.push("  портфель при открытии: " + openR2.snapshotUsdt.toFixed(2) + " USDT");
+  }
+
+  // Agent breakdown
+  lines.push("");
+  lines.push("👤 По агентам (сегодня):");
+  // Owner first
+  var ownerObj = {id:'owner', name: agentCfg.ownerName || 'Владелец'};
+  [ownerObj].concat(agentCfg.agents).forEach(function(a) {
+    var dp = agentDayProfit[a.id] || {};
+    var rz = agentRealized[a.id] || 0;
+    var parts = [];
+    CURS.forEach(function(c){
+      var v = dp[c];
+      if (v && Math.abs(v) >= 0.001) parts.push((v>=0?"+":"") + fmt(v,c));
+    });
+    if (!parts.length && Math.abs(rz) < 0.001) return; // skip agents with zero activity
+    var line = "  " + a.name + ":";
+    if (parts.length) line += " " + parts.join(", ");
+    if (Math.abs(rz) >= 0.001) line += " / реализовано: " + (rz>=0?"+":"") + rz.toFixed(2) + " USDT";
+    lines.push(line);
+  });
+
+  // Balances
+  lines.push("");
+  lines.push("📦 Балансы:");
+  CURS.forEach(function(c) {
+    var bal = exState.balances[c];
+    if (Math.abs(bal) < 0.001 && cap(c) === 0) return;
+    lines.push("  " + c.toUpperCase() + ": " + fmt(bal,c) + " (капитал: " + fmt(cap(c),c) + ")");
+  });
+
+  var text = lines.join("\n");
+
+  // Copy to clipboard
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(function() {
+      alert("Отчёт скопирован в буфер обмена");
+    });
+  } else {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+    alert("Отчёт скопирован в буфер обмена");
+  }
+});
+
+// ================================================================
+// EXPORT / IMPORT JSON
+// ================================================================
+document.getElementById("btn-ex-export").addEventListener("click", function() {
+  var data = JSON.stringify({exState: exState, shState: shState}, null, 2);
+  var a = document.createElement("a");
+  a.href = "data:application/json;charset=utf-8," + encodeURIComponent(data);
+  a.download = "tracker_backup_" + todayForFile() + ".json";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+});
+
+document.getElementById("btn-ex-import").addEventListener("click", function() {
+  document.getElementById("imp-file").click();
+});
+
+document.getElementById("imp-file").addEventListener("change", function(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      var data = JSON.parse(ev.target.result);
+      if (!data.exState || !data.exState.deals) { alert("Неверный формат файла"); return; }
+      if (!confirm("Загрузить данные из файла? Текущие данные будут заменены.")) return;
+      exState = data.exState;
+      if (data.shState) shState = data.shState;
+      // Run migration
+      if (!exState.cashflows) exState.cashflows = [];
+      if (!exState.closedRounds) exState.closedRounds = [];
+      rebuildRounds();
+      save();
+      // Sync capital inputs
+      CURS.forEach(function(c) {
+        var el = document.getElementById("cap-"+c);
+        if (el) el.value = exState.capital[c] || 0;
+      });
+      var a2el = document.getElementById("a2-pct");
+      if (a2el) a2el.value = exState.a2pct;
+      renderExchange();
+      alert("Данные загружены успешно");
+    } catch(err) {
+      alert("Ошибка чтения файла: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = ""; // reset so same file can be re-imported
+});
+
+function todayForFile() {
+  var d = new Date();
+  return d.getFullYear() + "-" + (d.getMonth()+1).toString().padStart(2,"0") + "-" + d.getDate().toString().padStart(2,"0");
+}
+document.getElementById('ex-log').addEventListener('click', function(e) {
+  var t = e.target;
+  while (t && t !== this) {
+    if (t.className && t.className.indexOf('ex-del') !== -1) {
+      deleteExDeal(parseInt(t.getAttribute('data-id')));
+      return;
+    }
+    t = t.parentNode;
+  }
+});
+
+// ================================================================
+// SHOP — RENDER
+// ================================================================
+function calcAvgRate() {
+  var uahInc = shState.incomes.filter(function(i){return i.type==='uah';});
+  if (!uahInc.length) return 0;
+  var tUah = uahInc.reduce(function(s,i){return s+i.amount;},0);
+  var tUsd = uahInc.reduce(function(s,i){return s+i.usd;},0);
+  return tUah&&tUsd ? tUah/tUsd : 0;
+}
+
+function renderShopSummary() {
+  var uahTotal = shState.incomes.filter(function(i){return i.type==='uah';}).reduce(function(s,i){return s+i.amount;},0);
+  var avg = calcAvgRate();
+  document.getElementById('sh-uah-total').textContent   = Math.round(uahTotal).toLocaleString('ru')+' ₴';
+  document.getElementById('sh-avg-rate').textContent    = avg ? avg.toFixed(2)+' ₴/$' : '—';
+  document.getElementById('sh-usd-pool').textContent    = shState.usdPool.toFixed(2)+' $';
+  document.getElementById('sh-cost-total').textContent  = shState.totalCost.toFixed(2)+' $';
+  document.getElementById('sh-profit-total').textContent= shState.totalProfit.toFixed(2)+' $';
+}
+
+function renderShopAgents() {
+  var ap = shState.agentProfit;
+  var h = '<div class="card owner">'
+    +'<div class="c-name">Владелец</div>'
+    +'<div class="c-val" style="color:var(--green)">'+ap.owner.toFixed(2)+' $</div>'
+    +'<div class="c-sub">50% от прибыли</div></div>'
+    +'<div class="card pa">'
+    +'<div class="c-name">Партнёр A</div>'
+    +'<div class="c-val" style="color:var(--gold)">'+ap.pa.toFixed(2)+' $</div>'
+    +'<div class="c-sub">25% от прибыли</div></div>'
+    +'<div class="card pb">'
+    +'<div class="c-name">Партнёр B</div>'
+    +'<div class="c-val" style="color:var(--usd)">'+ap.pb.toFixed(2)+' $</div>'
+    +'<div class="c-sub">25% от прибыли</div></div>';
+  document.getElementById('sh-agents').innerHTML = h;
+}
+
+function renderShopCharts() {
+  var ap = shState.agentProfit;
+  var mx = Math.max(ap.owner,ap.pa,ap.pb)||1;
+  var c1 = '<div class="chart-card"><div class="chart-title">Прибыль участников</div><div class="bar-chart">'
+    +'<div class="bar-row"><div class="bar-lbl">Владелец</div>'
+    +'<div class="bar-track"><div class="bar-fill" style="width:'+ap.owner/mx*100+'%;background:var(--green)"></div></div>'
+    +'<div class="bar-val" style="color:var(--green)">'+ap.owner.toFixed(2)+' $</div></div>'
+    +'<div class="bar-row"><div class="bar-lbl">Партнёр A</div>'
+    +'<div class="bar-track"><div class="bar-fill" style="width:'+ap.pa/mx*100+'%;background:var(--gold)"></div></div>'
+    +'<div class="bar-val" style="color:var(--gold)">'+ap.pa.toFixed(2)+' $</div></div>'
+    +'<div class="bar-row"><div class="bar-lbl">Партнёр B</div>'
+    +'<div class="bar-track"><div class="bar-fill" style="width:'+ap.pb/mx*100+'%;background:var(--usd)"></div></div>'
+    +'<div class="bar-val" style="color:var(--usd)">'+ap.pb.toFixed(2)+' $</div></div>'
+    +'</div></div>';
+
+  var dayMap={};
+  shState.sales.forEach(function(s){
+    if(!dayMap[s.date])dayMap[s.date]=0;
+    dayMap[s.date]+=s.profit;
+  });
+  var days=Object.keys(dayMap);
+  var mxD=Math.max.apply(null,days.map(function(d){return Math.abs(dayMap[d]);}))||1;
+  var c2='<div class="chart-card"><div class="chart-title">Прибыль по дням</div><div class="bar-chart">';
+  if(days.length){
+    days.forEach(function(d){
+      var v=dayMap[d],col=v>=0?'var(--green)':'var(--red)';
+      c2+='<div class="bar-row"><div class="bar-lbl">'+d+'</div>'
+        +'<div class="bar-track"><div class="bar-fill" style="width:'+Math.abs(v)/mxD*100+'%;background:'+col+'"></div></div>'
+        +'<div class="bar-val" style="color:'+col+'">'+v.toFixed(2)+' $</div></div>';
+    });
+  } else { c2+='<div style="color:var(--muted);font-size:11px">нет данных</div>'; }
+  c2+='</div></div>';
+
+  var uahU=shState.incomes.filter(function(i){return i.type==='uah';}).reduce(function(s,i){return s+i.usd;},0);
+  var dirU=shState.incomes.filter(function(i){return i.type==='usd';}).reduce(function(s,i){return s+i.usd;},0);
+  var mxI=Math.max(uahU,dirU)||1;
+  var c3='<div class="chart-card"><div class="chart-title">Структура захода</div><div class="bar-chart">'
+    +'<div class="bar-row"><div class="bar-lbl">UAH→USD</div>'
+    +'<div class="bar-track"><div class="bar-fill" style="width:'+uahU/mxI*100+'%;background:var(--uah)"></div></div>'
+    +'<div class="bar-val" style="color:var(--uah)">'+uahU.toFixed(2)+' $</div></div>'
+    +'<div class="bar-row"><div class="bar-lbl">Прямой $</div>'
+    +'<div class="bar-track"><div class="bar-fill" style="width:'+dirU/mxI*100+'%;background:var(--usd)"></div></div>'
+    +'<div class="bar-val" style="color:var(--usd)">'+dirU.toFixed(2)+' $</div></div>'
+    +'</div></div>';
+
+  document.getElementById('sh-charts').innerHTML=c1+c2+c3;
+}
+
+function renderShopLog() {
+  var list=document.getElementById('sh-log');
+  var all=[];
+  shState.incomes.forEach(function(i,idx){all.push({type:'income',data:i,idx:idx});});
+  shState.sales.forEach(function(s,idx){all.push({type:'sale',data:s,idx:idx});});
+  if(!all.length){list.innerHTML='<div class="empty">Записей пока нет</div>';return;}
+  var h='';
+  all.slice().reverse().forEach(function(item,i){
+    var num=all.length-i;
+    if(item.type==='income'){
+      var d=item.data;
+      var desc=d.type==='uah'
+        ?'<span class="tag t-uah">'+Math.round(d.amount).toLocaleString('ru')+' ₴</span> → <span class="tag t-usd">'+d.usd.toFixed(2)+' $</span> (курс '+d.rate+')'
+        :'<span class="tag t-usd">'+d.usd.toFixed(2)+' $</span> (прямой заход)';
+      h+='<div class="li"><div class="li-n">#'+num+'</div>'
+        +'<div><div class="li-m">'+desc+'</div><div class="li-s">'+d.date+' · заход</div></div>'
+        +'<div class="li-p"><div class="li-pv" style="color:var(--gold)">+'+d.usd.toFixed(2)+' $</div></div>'
+        +'<button class="db sh-del-i" data-idx="'+item.idx+'">✕</button></div>';
+    } else {
+      var s=item.data;
+      var col=s.profit>=0?'var(--green)':'var(--red)';
+      h+='<div class="li"><div class="li-n">#'+num+'</div>'
+        +'<div><div class="li-m">Продажа <span class="tag t-usd">'+s.saleUsd.toFixed(2)+' $</span>'
+        +' · себест. '+s.cost.toFixed(2)+' $'+(s.note?' · '+s.note:'')+'</div>'
+        +'<div class="li-s">'+s.date+(s.saleCur==='uah'?' · курс '+s.saleRate:'')+'</div></div>'
+        +'<div class="li-p"><div class="li-pv" style="color:'+col+'">'+(s.profit>=0?'+':'')+s.profit.toFixed(2)+' $</div></div>'
+        +'<button class="db sh-del-s" data-idx="'+item.idx+'">✕</button></div>';
+    }
+  });
+  list.innerHTML=h;
+}
+
+function renderShop() {
+  renderShopSummary();
+  renderShopAgents();
+  renderShopCharts();
+  renderShopLog();
+}
+
+// ================================================================
+// SHOP — ACTIONS
+// ================================================================
+document.getElementById('sh-income-type').addEventListener('change', function(){
+  var t=this.value;
+  document.getElementById('sh-income-lbl').textContent = t==='uah'?'Сумма (UAH)':'Сумма (USD)';
+  document.getElementById('sh-rate-wrap').style.display = t==='uah'?'':'none';
+  document.getElementById('sh-usd-wrap').style.display  = t==='uah'?'':'none';
+  document.getElementById('sh-income-amt').value='';
+  document.getElementById('sh-income-usd').value='';
+});
+document.getElementById('sh-income-amt').addEventListener('input', function(){
+  if(document.getElementById('sh-income-type').value!=='uah')return;
+  var a=parseFloat(this.value)||0, r=parseFloat(document.getElementById('sh-income-rate').value)||0;
+  if(r) document.getElementById('sh-income-usd').value=(a/r).toFixed(2);
+});
+document.getElementById('sh-income-rate').addEventListener('input', function(){
+  var a=parseFloat(document.getElementById('sh-income-amt').value)||0, r=parseFloat(this.value)||0;
+  if(r) document.getElementById('sh-income-usd').value=(a/r).toFixed(2);
+});
+document.getElementById('sh-sale-cur').addEventListener('change', function(){
+  document.getElementById('sh-sale-rate-wrap').style.display=this.value==='uah'?'':'none';
+});
+
+function addShIncome() {
+  var type=document.getElementById('sh-income-type').value;
+  var amt=parseFloat(document.getElementById('sh-income-amt').value);
+  if(!amt){alert('Введи сумму');return;}
+  var usd,rate=0;
+  if(type==='uah'){
+    rate=parseFloat(document.getElementById('sh-income-rate').value);
+    if(!rate){alert('Введи курс');return;}
+    usd=amt/rate;
+  } else { usd=amt; }
+  shState.incomes.push({type:type,amount:amt,rate:rate,usd:usd,date:today()});
+  shState.usdPool+=usd;
+  document.getElementById('sh-income-amt').value='';
+  document.getElementById('sh-income-rate').value='';
+  document.getElementById('sh-income-usd').value='';
+  save(); renderShop();
+}
+
+function addShSale() {
+  var amt=parseFloat(document.getElementById('sh-sale-amt').value);
+  var cur=document.getElementById('sh-sale-cur').value;
+  var cost=parseFloat(document.getElementById('sh-cost').value);
+  var note=document.getElementById('sh-note').value.trim();
+  if(!amt||!cost){alert('Заполни сумму и себестоимость');return;}
+  var saleUsd,saleRate=0;
+  if(cur==='uah'){
+    saleRate=parseFloat(document.getElementById('sh-sale-rate').value);
+    if(!saleRate){alert('Введи курс');return;}
+    saleUsd=amt/saleRate;
+  } else { saleUsd=amt; }
+  var profit=saleUsd-cost;
+  shState.totalCost+=cost;
+  shState.totalProfit+=profit;
+  shState.agentProfit.owner+=profit*0.5;
+  shState.agentProfit.pa   +=profit*0.25;
+  shState.agentProfit.pb   +=profit*0.25;
+  shState.sales.push({saleAmount:amt,saleCur:cur,saleRate:saleRate,saleUsd:saleUsd,cost:cost,profit:profit,note:note,date:today()});
+  document.getElementById('sh-sale-amt').value='';
+  document.getElementById('sh-cost').value='';
+  document.getElementById('sh-sale-rate').value='';
+  document.getElementById('sh-note').value='';
+  save(); renderShop();
+}
+
+function undoShLast(){
+  if(shState.sales.length){
+    var s=shState.sales[shState.sales.length-1];
+    shState.totalCost-=s.cost; shState.totalProfit-=s.profit;
+    shState.agentProfit.owner-=s.profit*0.5;
+    shState.agentProfit.pa-=s.profit*0.25;
+    shState.agentProfit.pb-=s.profit*0.25;
+    shState.sales.pop(); save(); renderShop(); return;
+  }
+  if(shState.incomes.length){
+    shState.usdPool-=shState.incomes[shState.incomes.length-1].usd;
+    shState.incomes.pop(); save(); renderShop(); return;
+  }
+  alert('Нет записей');
+}
+
+function resetShop(){
+  if(!confirm('Сбросить магазин?'))return;
+  if(!confirm('Точно?'))return;
+  shState=freshShState(); save(); renderShop();
+}
+
+function exportShCsv(){
+  var rows=[['#','Дата','Тип','Сумма','Вал','Курс','USD','Себест.','Прибыль','Заметка']];
+  shState.incomes.forEach(function(i,idx){
+    rows.push([idx+1,i.date,'Заход',i.amount,i.type==='uah'?'UAH':'USD',i.rate,i.usd.toFixed(2),'','','']);
+  });
+  shState.sales.forEach(function(s,idx){
+    rows.push([idx+1,s.date,'Продажа',s.saleAmount,s.saleCur.toUpperCase(),s.saleRate,s.saleUsd.toFixed(2),s.cost.toFixed(2),s.profit.toFixed(2),s.note]);
+  });
+  var csv=rows.map(function(r){return r.map(function(v){return'"'+(v||'')+'"';}).join(',');}).join('\n');
+  var a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='shop.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+document.getElementById('btn-sh-income').addEventListener('click', addShIncome);
+document.getElementById('btn-sh-sale').addEventListener('click',   addShSale);
+document.getElementById('btn-sh-undo').addEventListener('click',   undoShLast);
+document.getElementById('btn-sh-reset').addEventListener('click',  resetShop);
+document.getElementById('btn-sh-csv').addEventListener('click',    exportShCsv);
+document.getElementById('sh-log').addEventListener('click', function(e){
+  var t = e.target;
+  while (t && t !== this) {
+    if (t.className && t.className.indexOf('sh-del-i') !== -1) {
+      var idx = parseInt(t.getAttribute('data-idx'));
+      shState.usdPool -= shState.incomes[idx].usd;
+      shState.incomes.splice(idx,1); save(); renderShop(); return;
+    }
+    if (t.className && t.className.indexOf('sh-del-s') !== -1) {
+      var idx = parseInt(t.getAttribute('data-idx'));
+      var s = shState.sales[idx];
+      shState.totalCost -= s.cost; shState.totalProfit -= s.profit;
+      shState.agentProfit.owner -= s.profit*0.5;
+      shState.agentProfit.pa   -= s.profit*0.25;
+      shState.agentProfit.pb   -= s.profit*0.25;
+      shState.sales.splice(idx,1); save(); renderShop(); return;
+    }
+    t = t.parentNode;
+  }
+});
+
+// ================================================================
+// INIT
+// ================================================================
+load();
+loadAgentCfg();
+// Sync DOM fields from saved state
+CURS.forEach(function(c) {
+  var el = document.getElementById('cap-'+c);
+  if (el) el.value = exState.capital[c] !== undefined ? exState.capital[c] : 0;
+});
+
+populateAgentSelect();
+rebuildRounds();
+renderExchange();
+</script>
+
+<!-- ===== AGENTS CONFIG MODAL ===== -->
+<div class="modal-overlay hidden" id="agents-modal">
+  <div class="modal" style="width:420px;">
+    <div class="modal-title">
+      <button class="modal-close" id="agents-modal-close">✕</button>
+      ⚙ НАСТРОЙКА АГЕНТОВ
+    </div>
+    <div class="modal-hint">
+      Каждый агент получает свой % от сделок, которые он провёл.<br>
+      <b>Владелец</b> получает остаток: <code id="owner-pct-preview">100%</code> от каждой сделки.
+    </div>
+    <div id="agents-cfg-list"></div>
+    <button class="btn btn-o" style="width:100%;margin-bottom:12px;" id="btn-add-agent">+ Добавить агента</button>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-o" style="flex:1;" id="agents-cancel-btn">Отмена</button>
+      <button class="btn btn-g" style="flex:2;" id="agents-save-btn">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== GOOGLE SHEETS MODAL ===== -->
+<div class="modal-overlay hidden" id="gsheets-modal">
+  <div class="modal">
+    <div class="modal-title">
+      <button class="modal-close" id="gsheets-close">✕</button>
+      ⬇ ЗАГРУЗКА ИЗ GOOGLE SHEETS
+    </div>
+
+    <!-- STEP 1: настройка -->
+    <div id="gs-step-config">
+      <div class="modal-hint">
+        <b>Как настроить (один раз):</b><br>
+        1. Создай Google Form с полями: <code>giveCur, giveAmount, getCur, getAmount, rate, agent, client, note</code><br>
+        2. Открой связанную таблицу → Расширения → Apps Script<br>
+        3. Вставь скрипт-прокси (кнопка ниже) и задеплой как Web App (<i>Anyone</i>)<br>
+        4. Скопируй URL деплоя и вставь сюда ↓<br>
+        <a href="#" id="gs-show-script">📋 Показать Apps Script код</a>
+      </div>
+
+      <div id="gs-script-block" style="display:none;margin-bottom:14px;">
+        <div class="modal-hint" style="font-family:'JetBrains Mono',monospace;font-size:10px;white-space:pre-wrap;max-height:200px;overflow-y:auto;" id="gs-script-text"></div>
+        <button class="btn btn-o" style="width:100%;margin-top:6px;" id="gs-copy-script">📋 Скопировать скрипт</button>
+      </div>
+
+      <div class="field">
+        <label>URL Apps Script деплоя</label>
+        <input type="text" id="gs-url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <select id="gs-agent-filter" style="background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;padding:8px 10px;flex:1;">
+          <option value="">Все агенты</option>
+        </select>
+        <button class="btn btn-g" id="gs-fetch-btn" style="flex:2;">Загрузить сделки</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: превью -->
+    <div id="gs-step-preview" style="display:none;">
+      <div class="import-summary" id="gs-summary"></div>
+      <div id="gs-preview-list" style="max-height:340px;overflow-y:auto;margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-o" style="flex:1;" id="gs-back-btn">← Назад</button>
+        <button class="btn btn-g" style="flex:2;" id="gs-confirm-btn">Добавить новые сделки</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== AGENTS CONFIG MODAL =====
+
+var agentCfgDraft = [];
+var ownerNameDraft = '';
+
+function openAgentModal() {
+  // Deep clone current config into draft
+  agentCfgDraft = agentCfg.agents.map(function(a){ return {id:a.id, name:a.name, pct:a.pct}; });
+  ownerNameDraft = agentCfg.ownerName || 'Владелец';
+  renderAgentCfgList();
+  document.getElementById('agents-modal').classList.remove('hidden');
+}
+function closeAgentModal() {
+  document.getElementById('agents-modal').classList.add('hidden');
+}
+
+function renderAgentCfgList() {
+  var used = agentCfgDraft.reduce(function(s,a){ return s+(parseFloat(a.pct)||0); }, 0);
+  var rem  = Math.max(0, 100 - used);
+  var warn = used > 100;
+
+  // Update owner preview
+  document.getElementById('owner-pct-preview').textContent = rem.toFixed(0) + '%';
+  document.getElementById('owner-pct-preview').style.color = warn ? 'var(--red)' : 'var(--green)';
+
+  var html = '';
+  // Owner row (name editable, pct auto)
+  html += '<div class="agent-cfg-row owner-row">'
+    +'<span style="font-size:10px;color:var(--green);font-weight:700;width:28px;">👑</span>'
+    +'<input class="agent-cfg-name" id="owner-name-input" value="'+ownerNameDraft+'" placeholder="Владелец">'
+    +'<span style="font-size:10px;color:var(--muted);flex:1;">владелец</span>'
+    +'<span class="owner-remainder'+(warn?' warn':'')+'">'+rem.toFixed(0)+'%</span>'
+    +'</div>';
+
+  agentCfgDraft.forEach(function(a, i) {
+    html += '<div class="agent-cfg-row" data-idx="'+i+'">'
+      +'<span style="font-size:10px;color:var(--muted);width:28px;">#'+(i+1)+'</span>'
+      +'<input class="agent-cfg-name" data-field="name" data-idx="'+i+'" value="'+a.name+'" placeholder="Имя агента">'
+      +'<input class="agent-cfg-pct" data-field="pct" data-idx="'+i+'" value="'+a.pct+'" min="0" max="100" type="number" placeholder="0">'
+      +'<span style="font-size:11px;color:var(--muted);">%</span>'
+      +'<button class="agent-cfg-del" data-idx="'+i+'">✕</button>'
+      +'</div>';
+  });
+
+  var list = document.getElementById('agents-cfg-list');
+  list.innerHTML = html;
+
+  // Wire owner name input
+  document.getElementById('owner-name-input').addEventListener('input', function() {
+    ownerNameDraft = this.value;
+  });
+
+  // Wire agent field inputs
+  list.querySelectorAll('.agent-cfg-name[data-idx], .agent-cfg-pct[data-idx]').forEach(function(el) {
+    el.addEventListener('input', function() {
+      var idx = parseInt(this.dataset.idx);
+      var field = this.dataset.field;
+      if (field === 'pct') agentCfgDraft[idx].pct = parseFloat(this.value)||0;
+      else agentCfgDraft[idx].name = this.value;
+      // live-update remainder without full re-render (just recalc)
+      var u2 = agentCfgDraft.reduce(function(s,a){ return s+(parseFloat(a.pct)||0); }, 0);
+      var r2 = Math.max(0, 100-u2);
+      var w2 = u2 > 100;
+      var pr = document.getElementById('owner-pct-preview');
+      if (pr) { pr.textContent = r2.toFixed(0)+'%'; pr.style.color = w2?'var(--red)':'var(--green)'; }
+      list.querySelectorAll('.owner-remainder').forEach(function(el2){
+        el2.textContent = r2.toFixed(0)+'%';
+        el2.className = 'owner-remainder'+(w2?' warn':'');
+      });
+    });
+  });
+
+  // Wire delete buttons
+  list.querySelectorAll('.agent-cfg-del').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var idx = parseInt(this.dataset.idx);
+      agentCfgDraft.splice(idx, 1);
+      renderAgentCfgList();
+    });
+  });
+}
+
+document.getElementById('btn-add-agent').addEventListener('click', function() {
+  var newId = 'agent_' + Date.now();
+  agentCfgDraft.push({id: newId, name: 'Агент ' + (agentCfgDraft.length + 1), pct: 0});
+  renderAgentCfgList();
+});
+
+document.getElementById('agents-save-btn').addEventListener('click', function() {
+  var total = agentCfgDraft.reduce(function(s,a){ return s+(parseFloat(a.pct)||0); }, 0);
+  if (total > 100) {
+    alert('Сумма долей агентов превышает 100% (' + total.toFixed(1) + '%). Скорректируй проценты.');
+    return;
+  }
+  agentCfg.agents   = agentCfgDraft.map(function(a){ return {id:a.id, name:a.name, pct:parseFloat(a.pct)||0}; });
+  agentCfg.ownerName = ownerNameDraft || 'Владелец';
+  saveAgentCfg();
+  closeAgentModal();
+  populateAgentSelect();
+  rebuildRounds();
+  renderExchange();
+});
+
+document.getElementById('agents-cancel-btn').addEventListener('click', closeAgentModal);
+document.getElementById('agents-modal-close').addEventListener('click', closeAgentModal);
+document.getElementById('agents-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeAgentModal();
+});
+
+// ===== GOOGLE SHEETS INTEGRATION =====
+
+var APPS_SCRIPT_CODE = `// Google Apps Script — вставь в Extensions → Apps Script
+// Deploy → New Deployment → Web App → Anyone can access
+
+function doGet(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Form responses 1");
+  var data  = sheet.getDataRange().getValues();
+  var headers = data[0].map(function(h){ return h.toString().trim().toLowerCase(); });
+
+  var MAP = {
+    givecur:    ['givecur','give_cur','дают','валюта дают'],
+    giveamount: ['giveamount','give_amount','сумма дают'],
+    getcur:     ['getcur','get_cur','берут','валюта берут'],
+    getamount:  ['getamount','get_amount','сумма берут'],
+    rate:       ['rate','курс'],
+    agent:      ['agent','агент'],
+    client:     ['client','клиент','имя'],
+    note:       ['note','заметка','комментарий']
   };
 
-  function fmt(val, cur) {
-    if (cur === 'huf' || cur === 'czk') return Math.round(val).toLocaleString('ru') + ' ' + symbols[cur];
-    return val.toFixed(2) + ' ' + symbols[cur];
+  function findCol(key) {
+    var aliases = MAP[key] || [key];
+    for (var i = 0; i < headers.length; i++) {
+      if (aliases.indexOf(headers[i]) !== -1) return i;
+    }
+    return -1;
   }
 
-  function updateMarketLabels() {
-    const give = document.getElementById('give-cur').value;
-    const get  = document.getElementById('get-cur').value;
-    document.getElementById('market-base-label').textContent  = symbols[get];
-    document.getElementById('market-quote-label').textContent = symbols[give];
-  }
+  var cols = {};
+  Object.keys(MAP).forEach(function(k){ cols[k] = findCol(k); });
 
-  document.getElementById('give-cur').addEventListener('change', updateMarketLabels);
-  document.getElementById('get-cur').addEventListener('change', updateMarketLabels);
-  updateMarketLabels();
-
-  function renderBalances() {
-    CURRENCIES.forEach(cur => {
-      document.getElementById('bal-' + cur).textContent = fmt(state.balances[cur], cur);
-      const p  = state.profits[cur];
-      const el = document.getElementById('prof-' + cur);
-      el.textContent = 'прибыль: ' + fmt(p, cur);
-      el.className   = 'asset-profit ' + (p > 0 ? 'profit-pos' : p < 0 ? 'profit-neg' : 'profit-zero');
+  var rows = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var ts  = row[0]; // Timestamp always col 0
+    if (!ts) continue;
+    var obj = { _row: r + 1, timestamp: new Date(ts).toISOString() };
+    Object.keys(MAP).forEach(function(k){
+      obj[k] = cols[k] >= 0 ? row[cols[k]].toString().trim() : '';
     });
-
-    const has = state.deals.length > 0;
-    document.getElementById('summary-bar').style.display = has ? 'flex' : 'none';
-    document.getElementById('sum-deals').textContent = state.deals.length;
-    document.getElementById('sum-eur').textContent   = fmt(state.profits.eur,  'eur');
-    document.getElementById('sum-huf').textContent   = fmt(state.profits.huf,  'huf');
-    document.getElementById('sum-usdt').textContent  = fmt(state.profits.usdt, 'usdt');
-    document.getElementById('sum-usd').textContent   = fmt(state.profits.usd,  'usd');
-    document.getElementById('sum-czk').textContent   = fmt(state.profits.czk,  'czk');
+    rows.push(obj);
   }
 
-  function renderLog() {
-    const list = document.getElementById('log-list');
-    if (state.deals.length === 0) {
-      list.innerHTML = '<div class="empty-log">Сделок пока нет — добавьте первую выше</div>';
-      return;
-    }
-    list.innerHTML = state.deals.slice().reverse().map((d, i) => {
-      const num = state.deals.length - i;
-      const sign  = d.profit >= 0 ? '+' : '';
-      const color = d.profit >= 0 ? '#10b981' : '#f87171';
-      return `
-        <div class="log-item">
-          <div class="log-num">#${num}</div>
-          <div class="log-desc">
-            Отдал <span class="tag tag-${d.giveCur}">${fmt(d.giveAmount, d.giveCur)}</span>
-            → получил <span class="tag tag-${d.getCur}">${fmt(d.getAmount, d.getCur)}</span>
-            <br><small style="color:var(--muted)">курс: 1 ${symbols[d.getCur]} = ${d.rate} ${symbols[d.giveCur]}</small>
-          </div>
-          <div class="log-profit" style="color:${color}">
-            ${sign}${fmt(d.profit, d.getCur)}<br>
-            <small style="color:var(--muted)">${sign}${d.pct}%</small>
-          </div>
-        </div>`;
-    }).join('');
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true, rows: rows }))
+    .setMimeType(ContentService.MimeType.JSON);
+}`;
+
+document.getElementById('gs-show-script').addEventListener('click', function(e) {
+  e.preventDefault();
+  var block = document.getElementById('gs-script-block');
+  block.style.display = block.style.display === 'none' ? 'block' : 'none';
+  document.getElementById('gs-script-text').textContent = APPS_SCRIPT_CODE;
+});
+
+document.getElementById('gs-copy-script').addEventListener('click', function() {
+  navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(function() {
+    document.getElementById('gs-copy-script').textContent = '✓ Скопировано!';
+    setTimeout(function(){ document.getElementById('gs-copy-script').textContent = '📋 Скопировать скрипт'; }, 2000);
+  });
+});
+
+// Open / close modal
+document.getElementById('btn-gsheets').addEventListener('click', function() {
+  document.getElementById('gsheets-modal').classList.remove('hidden');
+  // restore saved URL
+  var saved = localStorage.getItem('gs_url');
+  if (saved) document.getElementById('gs-url').value = saved;
+  // populate agent filter dynamically
+  var sel = document.getElementById('gs-agent-filter');
+  sel.innerHTML = '<option value="">Все агенты</option>';
+  var opt0 = document.createElement('option');
+  opt0.value = 'owner'; opt0.textContent = agentCfg.ownerName || 'Владелец';
+  sel.appendChild(opt0);
+  agentCfg.agents.forEach(function(a) {
+    var o = document.createElement('option');
+    o.value = a.id; o.textContent = a.name;
+    sel.appendChild(o);
+  });
+});
+document.getElementById('gsheets-close').addEventListener('click', closeGsModal);
+document.getElementById('gsheets-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeGsModal();
+});
+function closeGsModal() {
+  document.getElementById('gsheets-modal').classList.add('hidden');
+  showGsStep('config');
+}
+function showGsStep(step) {
+  document.getElementById('gs-step-config').style.display  = step === 'config'  ? '' : 'none';
+  document.getElementById('gs-step-preview').style.display = step === 'preview' ? '' : 'none';
+}
+
+// Normalize currency string from form
+function normCur(s) {
+  s = (s||'').toUpperCase().trim();
+  var map = {'USDT':'usdt','USD':'usd','EUR':'eur','HUF':'huf','CZK':'czk',
+             'ЮСДТ':'usdt','ДОЛЛАР':'usd','ЕВРО':'eur','ФОРИНТ':'huf'};
+  return map[s] || s.toLowerCase();
+}
+
+var gsPreviewDeals = [];
+
+document.getElementById('gs-fetch-btn').addEventListener('click', function() {
+  var url = document.getElementById('gs-url').value.trim();
+  if (!url) { alert('Введи URL Apps Script деплоя'); return; }
+  localStorage.setItem('gs_url', url);
+
+  var btn = document.getElementById('gs-fetch-btn');
+  btn.innerHTML = '<span class="spin">⟳</span> Загрузка...';
+  btn.disabled = true;
+
+  fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      btn.textContent = 'Загрузить сделки';
+      btn.disabled = false;
+      if (!data.ok || !data.rows) throw new Error(data.error || 'Нет данных');
+      processGsRows(data.rows);
+    })
+    .catch(function(err) {
+      btn.textContent = 'Загрузить сделки';
+      btn.disabled = false;
+      alert('Ошибка загрузки: ' + err.message + '\n\nПроверь URL и права деплоя (Anyone).');
+    });
+});
+
+function processGsRows(rows) {
+  var agentFilter = document.getElementById('gs-agent-filter').value;
+  var existingIds = new Set(exState.deals.map(function(d){ return d._gsRow; }).filter(Boolean));
+
+  gsPreviewDeals = [];
+
+  rows.forEach(function(r) {
+    if (agentFilter && r.agent.toUpperCase() !== agentFilter.toUpperCase()) return;
+
+    var gc = normCur(r.givecur);
+    var rc = normCur(r.getcur);
+    var ga = parseFloat(r.giveamount);
+    var ra = parseFloat(r.getamount);
+    var rt = parseFloat(r.rate);
+
+    var valid = CURS.indexOf(gc) !== -1 && CURS.indexOf(rc) !== -1 &&
+                gc !== rc && ga > 0 && ra > 0 && rt > 0;
+
+    var mv     = ga * rt;
+    var profit = ra - mv;
+    var pct    = mv > 0 ? ((profit/mv)*100).toFixed(1) : '0.0';
+
+    // parse timestamp for date/time display
+    var dt = new Date(r.timestamp);
+    var dateStr = isNaN(dt) ? today() : dt.toLocaleDateString('ru',{day:'2-digit',month:'2-digit'});
+    var timeStr = isNaN(dt) ? now()   : dt.toLocaleTimeString('ru',{hour:'2-digit',minute:'2-digit'});
+
+    gsPreviewDeals.push({
+      _gsRow: r._row,
+      isDup:  existingIds.has(r._row),
+      isValid: valid,
+      deal: {
+        id: Date.now() + Math.random(),
+        _gsRow: r._row,
+        giveCur: gc, giveAmount: ga,
+        getCur:  rc, getAmount:  ra,
+        rate: rt, profit: profit, pct: pct,
+        agent: r.agent || 'A1',
+        client: r.client || '',
+        note: r.note || '',
+        date: dateStr, time: timeStr
+      }
+    });
+  });
+
+  renderGsPreview();
+  showGsStep('preview');
+}
+
+function renderGsPreview() {
+  var newCount = 0, dupCount = 0, badCount = 0;
+  var html = '';
+
+  gsPreviewDeals.forEach(function(item) {
+    var d = item.deal;
+    if (!item.isValid) { badCount++; return; }
+    if (item.isDup) dupCount++; else newCount++;
+
+    var cls  = item.isDup ? 'import-row dup' : 'import-row new';
+    var badge = item.isDup
+      ? '<span class="import-row-badge ib-dup">уже есть</span>'
+      : '<span class="import-row-badge ib-new">новая</span>';
+
+    html += '<div class="'+cls+'">'
+      + '<div class="import-row-left">'
+      + fmt(d.giveAmount, d.giveCur) + ' <span class="tag t-'+d.giveCur+'">'+d.giveCur.toUpperCase()+'</span>'
+      + ' → '
+      + fmt(d.getAmount, d.getCur) + ' <span class="tag t-'+d.getCur+'">'+d.getCur.toUpperCase()+'</span>'
+      + '<br><span style="color:var(--muted);font-size:10px;">'
+      + d.date + ' ' + d.time
+      + (d.client ? ' · ' + d.client : '')
+      + ' <span class="ab ab-'+d.agent.toLowerCase()+'">'+d.agent+'</span>'
+      + '</span>'
+      + '</div>' + badge + '</div>';
+  });
+
+  if (!html) html = '<div class="empty">Нет подходящих сделок</div>';
+
+  document.getElementById('gs-preview-list').innerHTML = html;
+  document.getElementById('gs-summary').innerHTML =
+    '<b>' + newCount + '</b> новых · <b>' + dupCount + '</b> дубликатов · <b>' + badCount + '</b> некорректных';
+
+  document.getElementById('gs-confirm-btn').disabled = newCount === 0;
+  document.getElementById('gs-confirm-btn').textContent = newCount > 0
+    ? 'Добавить ' + newCount + ' новых сделок'
+    : 'Нет новых сделок';
+}
+
+document.getElementById('gs-back-btn').addEventListener('click', function() { showGsStep('config'); });
+
+document.getElementById('gs-confirm-btn').addEventListener('click', function() {
+  var added = 0;
+  gsPreviewDeals.forEach(function(item) {
+    if (!item.isValid || item.isDup) return;
+    exState.deals.push(item.deal);
+    added++;
+  });
+  if (added > 0) {
+    rebuildRounds();
+    save();
+    renderExchange();
   }
-
-  function addDeal() {
-    const giveAmount = parseFloat(document.getElementById('give-amount').value);
-    const giveCur    = document.getElementById('give-cur').value;
-    const getAmount  = parseFloat(document.getElementById('get-amount').value);
-    const getCur     = document.getElementById('get-cur').value;
-    const marketRate = parseFloat(document.getElementById('market-rate').value);
-
-    if (!giveAmount || !getAmount || !marketRate || giveCur === getCur) {
-      alert('Заполни все поля. Валюты должны быть разными.');
-      return;
-    }
-
-    const marketValueInGetCur = giveAmount / marketRate;
-    const profit = getAmount - marketValueInGetCur;
-    const pct    = ((profit / marketValueInGetCur) * 100).toFixed(1);
-
-    state.balances[giveCur] -= giveAmount;
-    state.balances[getCur]  += getAmount;
-    state.profits[getCur]   += profit;
-
-    state.deals.push({ giveAmount, giveCur, getAmount, getCur, rate: marketRate, profit, pct });
-
-    renderBalances();
-    renderLog();
-
-    const card = document.querySelector('.asset-card.' + getCur);
-    if (card) {
-      card.style.boxShadow = `0 0 24px 4px var(--${getCur})`;
-      setTimeout(() => card.style.boxShadow = '', 800);
-    }
+  closeGsModal();
+  if (added > 0) {
+    // brief toast
+    var t = document.createElement('div');
+    t.textContent = '✓ Добавлено сделок: ' + added;
+    Object.assign(t.style, {
+      position:'fixed', bottom:'28px', left:'50%', transform:'translateX(-50%)',
+      background:'var(--green)', color:'#070a10', padding:'10px 22px',
+      borderRadius:'8px', fontWeight:'700', fontSize:'12px', zIndex:'2000',
+      fontFamily:"'JetBrains Mono',monospace"
+    });
+    document.body.appendChild(t);
+    setTimeout(function(){ t.remove(); }, 2500);
   }
-
-  function resetAll() {
-    CURRENCIES.forEach(c => { state.balances[c] = 0; state.profits[c] = 0; });
-    state.deals = [];
-    renderBalances();
-    renderLog();
-  }
-
-  renderBalances();
+});
 </script>
 </body>
 </html>
